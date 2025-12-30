@@ -11,6 +11,9 @@
 ##
 ##  This script is designed for reproducibility and public
 ##  archiving (GitHub / Zenodo / Dryad).
+##  
+## You can add working directory using Rscript from the commandline, 
+## otherwise the folder from which Rscript is run from will default as wd.
 ############################################################
 
 # NOTE:
@@ -27,8 +30,12 @@ library(parallel)
 library(mvtnorm)
 library(ks)
 library(ggplot2)
-setwd("~/REEIM/")
 
+args <- commandArgs(trailingOnly = TRUE) 
+if(length(args)>0) setwd(args)
+
+
+#setwd("~/REEIM/REEIM/")
 ## =======================
 ##  Helper functions
 ## =======================
@@ -63,7 +70,7 @@ parse_slim_params <- function(filename) {
 }
 
 ## build SLiM command
-build_slim_cmd <- function(theta, sim_parameters, script) {
+build_slim_cmd <- function(theta, sim_parameters, script,out_folder) {
   
   sim_parameters[, c("w","S_hmax","S_LT","f","H") := as.list(theta)]
   
@@ -72,7 +79,7 @@ build_slim_cmd <- function(theta, sim_parameters, script) {
     as.character(sim_parameters)
   )
   
-  paste("slim", paste(args, collapse = " "), script)
+  paste("slim ", paste0('-d folder=\\"', normalizePath(out_folder), '\\"'), paste(args, collapse = " "), script)
 }
 
 #-----------------------------------------------------------
@@ -247,9 +254,12 @@ kde_prev  <- NULL
 #GEN = 1
 for (GEN in seq_len(Gens)) {
       
-  message("Starting ABC generation ", GEN)
   
+  
+  message("Starting ABC generation ", GEN)
   out_folder <- file.path(base_folder, paste0("GEN_", GEN))
+
+  message("Output folder: ",normalizePath(out_folder))
   dir.create(out_folder, showWarnings = FALSE,recursive = TRUE)
   
   ## Run SLiM simulations
@@ -259,9 +269,8 @@ for (GEN in seq_len(Gens)) {
     
     cmds <- replicate(100, {
       theta <- sapply(prior_lim, function(x) format(runif(1, x[1], x[2]),digits=3))
-      build_slim_cmd(theta, sim_parameters, slim_script)
+      cmd <- build_slim_cmd(theta, sim_parameters, slim_script,out_folder)
     })
-    
     
     writeLines(cmds, "cmds.txt")
     system(paste("cat cmds.txt | parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)

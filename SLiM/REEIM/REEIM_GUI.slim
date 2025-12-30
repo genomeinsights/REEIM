@@ -42,8 +42,7 @@ initialize() {
 	//	!Required for ABC pipelines where each run writes to a unique path
 	// As long as this path is valid, you should be able to run this code in SLiM GUI
 	// -----------------------------------------------------------------
-	
-	if (!exists("folder")) defineConstant("folder", "~/REEIM/REEIM/SLiM/REEIM/out/GEN_1");
+	defineConstant("folder", "~/REEIM/REEIM/SLiM/REEIM/out/GEN_1");
 	
 	
 	// -----------------------------------------------------------------
@@ -115,7 +114,7 @@ initialize() {
 	// -----------------------------------------------------------------
 	if (!exists("rep")) defineConstant("rep", 1);
 	// use 1 to print to console when running in SLiM GUI
-	defineConstant("print", 0);
+	defineConstant("print", 1);
 	
 	
 	// =================================================================

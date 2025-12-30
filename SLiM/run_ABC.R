@@ -187,17 +187,17 @@ proposal_density <- function(theta, centers, weights, cov_mat) {
 ##  Global configuration
 ## =======================
 
-slim_script  <- "REEIM.slim"
-base_folder  <- "out/"
+slim_script  <- "/SLiM/REEIM/REEIM.slim" ## the size selectivity and historical fishing intensity are hard coded in the REEIM.slim file and come from file /R/SSF.R
+base_folder  <- "/SLiM/REEIM/"
 n_particles  <- 2500
 Gens         <- 5
-APOT         <- 10125 # in simulation cycles, the actual APOT is determined by the historical fishing intensity defined in REEIM.slim
-alpha        <- 0.2
+APOT         <- 10125        # in simulation cycles, the actual APOT is determined by the historical fishing intensity defined in REEIM.slim
+alpha        <- 0.2          # cutoff for accepted particles
 cores        <- 12
 
 ## Observed data
-load("observed_data.RData")  # age_structure_obs, size_structure_obs
-LT_obs <- 169.2
+load("./empirical_data/observed_data.RData")  # age_structure_obs, size_structure_obs, created by script /empirical_data/R/get_observed_data.R
+LT_obs <- 169.2              # comes from litterature
 
 ## Priors
 prior_lim <- list(
@@ -209,6 +209,7 @@ prior_lim <- list(
 )
 
 ## Fixed simulation parameters
+## NA means the parameter is not fixed
 sim_parameters <- data.table(
   K           = 10000,
   H           = NA,

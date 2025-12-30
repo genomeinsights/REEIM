@@ -27,6 +27,7 @@ library(parallel)
 library(mvtnorm)
 library(ks)
 library(ggplot2)
+setwd("~/REEIM/")
 
 ## =======================
 ##  Helper functions
@@ -201,10 +202,10 @@ LT_obs <- 169.2              # comes from litterature
 
 ## Priors
 prior_lim <- list(
-  w      = c(0.1, 0.6),
-  S_hmax = c(60, 120),
-  S_LT   = c(150, 300),
-  f      = c(0.1, 1.5),
+  w      = c(0.1, 0.7),
+  S_hmax = c(70, 100),
+  S_LT   = c(100, 200),
+  f      = c(0.5, 1.8),
   H      = c(0, 0.3)
 )
 
@@ -254,18 +255,21 @@ for (GEN in seq_len(Gens)) {
   ## Run SLiM simulations
   while (length(list.files(out_folder, pattern = "trait")) < n_particles) {
     
+    message(length(list.files(out_folder, pattern = "trait"))," out of ", n_particles, " particles are done")
+    
     cmds <- replicate(100, {
-      theta <- sapply(prior_lim, function(x) runif(1, x[1], x[2]))
+      theta <- sapply(prior_lim, function(x) format(runif(1, x[1], x[2]),digits=3))
       build_slim_cmd(theta, sim_parameters, slim_script)
     })
     
     
     writeLines(cmds, "cmds.txt")
-    system(paste("cat cmds.txt | parallel -j", cores))
+    system(paste("cat cmds.txt | parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
   }
   
   ## Summarize
   files <- list.files(out_folder, full.names = TRUE, pattern = "demographic")
+  
   particles[[GEN]] <- summarise_simulations(
     files,
     gen_extract,

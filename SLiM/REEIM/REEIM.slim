@@ -1,0 +1,493 @@
+// =====================================================================
+//  SSF_ABC.slim
+//
+//  Eco-genetic individual-based model with size-selective fishing
+//  --------------------------------------------------------------
+//  Framework : SLiM non–Wright-Fisher (nonWF)
+//  Purpose   : Forward simulation for ABC–SMC inference and
+//              posterior predictive simulations
+//
+//  Traits    :
+//    - h_max : Maximum adult growth rate
+//    - L_T   : Size at maturation
+//    - g     : Parental investment
+//
+//  Harvest   :
+//    - Size-selective
+//    - Biomass-weighted
+//    - Driven by empirical vulnerability and historical effort
+//
+//  Notes:
+//    * This script is intentionally verbose so it can easily be customized
+//    * Designed for reproducibility and public archiving.
+//
+// =====================================================================
+
+
+// =====================================================================
+//  INITIALIZATION
+// =====================================================================
+
+initialize() {
+	
+	// -----------------------------------------------------------------
+	// Model type and sex system
+	// -----------------------------------------------------------------
+	initializeSLiMModelType("nonWF");
+	initializeSex("A");   // Dioecious, autosomal inheritance
+	
+	
+	// -----------------------------------------------------------------
+	// Output folder (set externally by R / bash)
+	//	!Required for ABC pipelines where each run writes to a unique path
+	// As long as this path is valid, you should be able to run this code in SLiM GUI
+	// -----------------------------------------------------------------
+	defineConstant("folder", "/Volumes/T9/REEIM/ABC_SMC/out/GEN_1");
+	
+	
+	// -----------------------------------------------------------------
+	// Inferred parameters (overwritten via -d flags if present)
+	// -----------------------------------------------------------------
+	if (!exists("f"))      defineConstant("f", 0.8);     // fecundity scaling
+	if (!exists("w"))      defineConstant("w", 0.3);     // cost of fecundity
+	if (!exists("S_hmax")) defineConstant("S_hmax", 90); // directional viability cost
+	if (!exists("S_LT"))   defineConstant("S_LT", 180);
+	if (!exists("H"))      defineConstant("H", 0.3);     // terminal harvest intensity
+	
+	
+	// -----------------------------------------------------------------
+	// Fixed biological limits
+	// -----------------------------------------------------------------
+	if (!exists("LT_lim"))   defineConstant("LT_lim", 250);
+	if (!exists("hmax_lim")) defineConstant("hmax_lim", 0);
+	if (!exists("K"))        defineConstant("K", 10000);
+	if (!exists("max_age"))  defineConstant("max_age", 25);
+	
+	
+	// -----------------------------------------------------------------
+	// Reference trait values (baseline estimates)
+	// -----------------------------------------------------------------
+	// These values are NOT Bayesian priors.
+	// They represent empirically and independently derived reference
+	// estimates for growth and life-history traits that are known to
+	// reproduce realistic growth trajectories.
+	//
+	// These reference values:
+	//   • set biologically meaningful trait scales,
+	//   • initialize the population near plausible states,
+	//   • and are used to scale mutational effects.
+	//
+	// They do NOT constrain posterior outcomes; all traits evolve freely
+	// under selection and inheritance.
+	if (!exists("L_T_prior"))   defineConstant("L_T_prior", 169.2);
+	if (!exists("g_prior"))     defineConstant("g_prior", 0.24);
+	if (!exists("h_max_prior")) defineConstant("h_max_prior", 62.0);
+	
+	
+	// -----------------------------------------------------------------
+	// Growth & density dependence parameters
+	// -----------------------------------------------------------------
+	if (!exists("g_i"))   defineConstant("g_i", 0.24);  // immature growth cost
+	if (!exists("h_0"))   defineConstant("h_0", 1.72);  // first-year multiplier
+	if (!exists("gamma")) defineConstant("gamma", 0.18);
+	if (!exists("delta")) defineConstant("delta", 0.57);
+	if (!exists("D_K"))   defineConstant("D_K", 8.67);
+	
+	
+	// -----------------------------------------------------------------
+	// Genetics
+	// -----------------------------------------------------------------
+	if (!exists("sd")) defineConstant("sd", 0.05);  // mutational SD (scaled)
+	if (!exists("u"))  defineConstant("u", 1e-6);   // mutation rate
+	if (!exists("Ve")) defineConstant("Ve", 0.05);  // environmental variance
+	
+	
+	// -----------------------------------------------------------------
+	// Length–weight relationship
+	// -----------------------------------------------------------------
+	if (!exists("a")) defineConstant("a", 3.958007e-6);
+	if (!exists("b")) defineConstant("b", 3.186062);
+	
+	
+	// -----------------------------------------------------------------
+	// Bookkeeping
+	// -----------------------------------------------------------------
+	if (!exists("rep")) defineConstant("rep", 1);
+	// use 1 to print to console when running in SLiM GUI
+	defineConstant("print", 0); 
+	
+	
+	// =================================================================
+	//  Historical fishing trajectory
+	// =================================================================
+	
+	defineConstant("Tdelta", 10000);   // duration of burn-in
+	defineConstant("Hx", 1); // multiplier after APOT (Hx=0 = fishing stops)
+	
+	// fishing starts after burn-in
+	
+	defineConstant("FishingIntensity", c(
+		0, 0.003, 0.004, 0.004, 0.005, 0.005, 0.006, 0.006, 0.007, 0.008,
+		0.008, 0.009, 0.01, 0.011, 0.012, 0.014, 0.015, 0.017, 0.019,
+		0.021, 0.023, 0.025, 0.028, 0.031, 0.034, 0.038, 0.042, 0.046,
+		0.051, 0.056, 0.062, 0.069, 0.076, 0.084, 0.093, 0.103, 0.114,
+		0.126, 0.14, 0.155, 0.171, 0.189, 0.209, 0.231, 0.255, 0.281,
+		0.309, 0.34, 0.372, 0.407, 0.443, 0.481, 0.519, 0.557, 0.595,
+		0.633, 0.669, 0.705, 0.739, 0.772, 0.802, 0.831, 0.857, 0.881,
+		0.902, 0.921, 0.937, 0.951, 0.963, 0.972, 0.979, 0.985, 0.989,
+		0.993, 0.994, 0.996, 0.997, 0.997, 0.998, 0.999, 0.999, 1
+		));
+	
+	defineConstant("APOT",   Tdelta+size(FishingIntensity));   // assumed present-day observation time
+	defineConstant("projection", 0);   // years after APOT, default 0 for ABC-SMC but needs to be >0 for predictive simulations
+	defineConstant("G", APOT + projection);
+	
+	// Size-selectivity curve (10 mm bins)
+	defineConstant("SSF", c(
+		0, 0, 0.001, 0.002, 0.003, 0.004, 0.007, 0.01, 0.014, 0.021,
+		0.032, 0.048, 0.07, 0.103, 0.147, 0.205, 0.277, 0.362, 0.456,
+		0.553, 0.646, 0.73, 0.801, 0.858, 0.901, 0.932, 0.954, 0.972,
+		0.986, 1
+		));
+	
+	
+	
+	// =================================================================
+	//  Genetic architecture
+	// =================================================================
+	
+	initializeMutationType("m1", 0.5, "n", 0, sd * L_T_prior);   // L_T
+	initializeMutationType("m2", 0.5, "n", 0, sd * g_prior);    // g
+	initializeMutationType("m3", 0.5, "n", 0, sd * h_max_prior);// h_max
+	
+	initializeGenomicElementType("g1", c(m1, m2, m3), c(1,1,1));
+	initializeGenomicElement(g1, 0, 9999);
+	
+	// High recombination ensures approximate independence among loci
+	initializeMutationRate(u * 10);
+	initializeRecombinationRate(u * 100);
+	
+	
+	// =================================================================
+	//  Output files
+	// =================================================================
+	
+	defineConstant("file_name",
+		paste("S_hmax",S_hmax,"_S_LT",S_LT,"_w",w,
+		"_hlim",hmax_lim,"_LT_lim",LT_lim,
+		"_f",f,"_H",H,"_h_0",h_0,"_g_i",g_i,
+		"_K",K,"_Hx",Hx,"_rep",rep, sep="")
+		);
+	
+	// Clean old files
+	deleteFile(paste0(folder,"/demographic_data_",file_name,".txt"));
+	deleteFile(paste0(folder,"/trait_stats_",file_name,".txt"));
+	
+	// Write header
+	writeFile(
+		paste0(folder,"/trait_stats_",file_name,".txt"),
+		"G LT Va_LT Vp_LT g Va_g Vp_g h hmax Va_hmax Vp_hmax median_size",
+		append=F
+		);
+}
+
+
+// =====================================================================
+//  REPRODUCTION
+// =====================================================================
+
+reproduction(NULL, "F") {
+	
+	if (!individual.tagL0) return;
+	
+	mate = subpop.sampleIndividuals(1, sex="M", tagL0=T);
+	if (!mate.size()) return;
+	
+	g = individual.sumOfMutationsOfType(m2) + g_prior*0.8;
+	g = g + rnorm(1, 0, sqrt(Ve) * sim.getValue("g_mean"));
+	
+	lambda = g * a * individual.tagF^b * f;
+	if (lambda <= 0) return;
+	
+	for (i in seqLen(rpois(1, lambda)))
+		subpop.addCrossed(individual, mate);
+}
+
+// =====================================================================
+//  INITIAL POPULATION
+// =====================================================================
+
+1 early() {
+	sim.addSubpop("p1", K);
+	
+	// Random age structure (0–20 years)
+	p1.individuals.age = rdunif(K, 0, 20);
+	
+	// Initial size proxy for first reproduction
+	p1.individuals.tagF = p1.individuals.age * h_max_prior / 5;
+	p1.individuals.tagL0 = F;
+}
+
+
+// =====================================================================
+//  LIFE CYCLE: growth, selection, fishing
+// =====================================================================
+
+
+2000 late() {
+	sim.chromosome.setMutationRate(u);// reduce mutation rate
+}
+
+1:G early() {
+	
+	// individuals and their ages
+	inds = p1.individuals;
+	ages = inds.age;
+	
+	
+	// This is necessary for the remaining code to work
+	inds[ages==0].tagF = 0.0;
+	inds[ages==0].tagL0 = F;
+	
+	
+	// -------------------------
+	// Express traits
+	// -------------------------
+	h_max = inds.sumOfMutationsOfType(m3) + h_max_prior * 0.8;
+	h_max = h_max + rnorm(size(inds), 0, sqrt(Ve) * h_max_prior);
+	Va_h_max = var(h_max);
+	
+	L_T = inds.sumOfMutationsOfType(m1) + L_T_prior * 0.8;
+	Va_L_T = var(L_T);
+	L_T = L_T + rnorm(size(inds), 0, sqrt(Ve) * L_T_prior);
+	
+	g = inds.sumOfMutationsOfType(m2) + g_prior * 0.8;
+	Va_g = var(g);
+	g = g + rnorm(size(inds), 0, sqrt(Ve) * g_prior);
+	g[g < 0] = 0;
+	
+	
+	
+	// -------------------------
+	// Density-dependent growth
+	// -------------------------
+	D = (K / size(inds[ages != 0])) * D_K;
+	h = h_max / (1 + gamma * D^delta);
+	h[h < 0] = 0;
+	
+	
+	// -------------------------
+	// Growth update
+	// -------------------------
+	
+	
+	immature = inds.tagF < L_T;
+	mature   = inds.tagF >= L_T;
+	
+	inds[immature].tagF = inds[immature].tagF +(h[immature]-(g_i/(g_i+3))*(inds[immature].tagF+h[immature]));
+	
+	inds[mature].tagF = inds[mature].tagF +(h[mature]-(g[mature]/(g[mature]+3))*(inds[mature].tagF+h[mature]));
+	
+	inds[ages==0].tagF = h[ages==0]*h_0;
+	
+	inds.tagL0 = mature;
+	
+	// -------------------------
+	// Viability selection
+	// -------------------------
+	
+	// deviations must be calculated like this since "max" function is not vectorized in SLiM!
+	deviations = h_max-hmax_lim;
+	deviations[deviations<0]=0;
+	fitness_h = exp(-(deviations^2) / (2*S_hmax^2));
+	
+	deviations = LT_lim - L_T;
+	deviations[deviations<0]=0;
+	fitness_LT = exp(-(deviations^2) / (2*S_LT^2));
+	
+	fec_cost = g * w;
+	fec_cost[!inds.tagL0] = 0;
+	
+	
+	// -------------------------
+	// Size-selective fishing
+	// -------------------------
+	fishing_fitness = 1;
+	
+	if (sim.cycle > Tdelta) {
+		
+		size_class = trunc(inds.tagF / 10);
+		fishing_mort = rep(0.0, size(size_class));
+		
+		idx = match(asInteger(size_class), 6:35); // speicified for individuals between 6 and 35 cm
+		fishing_mort[idx > -1] = SSF[idx[idx > -1]];
+		fishing_mort[size_class > 35] = 1;
+		
+		weights = a * inds.tagF^b;
+		weights = weights / sum(weights);
+		
+		// scaling factor to ensure H is expressed as % of biomass
+		H_k = sum(weights * fishing_mort) / H /
+			FishingIntensity[size(FishingIntensity)-1];
+		
+		fishing_fitness =
+			1 - fishing_mort / H_k *
+			FishingIntensity[min(sim.cycle - Tdelta,size(FishingIntensity)-1)];
+		
+		if (sim.cycle > Tdelta+length(FishingIntensity)-1) {
+			fishing_fitness =
+				1 - fishing_mort / H_k *
+				FishingIntensity[size(FishingIntensity)-1]*Hx; // fishing intensity after APOT
+		
+		}else{
+			fishing_fitness =
+				1 - fishing_mort / H_k *
+				FishingIntensity[sim.cycle - Tdelta];
+		}
+		fishing_fitness[fishing_fitness < 0] = 0;
+	}
+	
+	
+	
+	// -------------------------
+	// Combine fitness components
+	// -------------------------
+	inds.fitnessScaling =
+		fitness_h * fitness_LT *
+		(1 - fec_cost) * fishing_fitness *
+		ifelse(ages > max_age, 0, 1); // indcludes fishing fitness
+	
+	p1.fitnessScaling = K / (size(inds) * mean(inds.fitnessScaling)); // does not include fishing fitness
+	
+	
+	
+	// -------------------------
+	// Store means for reproduction and output
+	// -------------------------
+	sim.setValue("g_mean", mean(g));
+	sim.setValue("LT_mean", mean(L_T));
+	sim.setValue("hmax_mean", mean(h_max));
+	sim.setValue("ages",quantile(ages,0.99));
+	
+	
+	// -------------------------
+	// Print to console and/or record trait values and their variance componentns
+	// -------------------------
+	
+	if((sim.cycle % 1000==0 & sim.cycle<Tdelta) | sim.cycle>Tdelta-100){ // every 1000 years or every year for Tdelta - 100		
+		
+		if(print==1){
+			
+			cat("|G:"+sim.cycle+" ");
+			cat("|g:"+mean(g)+" ");
+			cat("|LT:"+round(mean(L_T))+" ");
+			cat("|h:"  + round(mean(h))+" ");
+			cat("|median_size:"  + quantile(inds.tagF,0.5));
+			cat("|age_q99:"  + quantile(ages,0.99));
+			catn();
+		}
+		
+		// record trait values and their variance components
+		line = paste(sim.cycle,
+			mean(L_T),
+			Va_L_T,
+			var(L_T),
+			mean(g),
+			Va_g,
+			var(g),
+			mean(h),
+			mean(h_max),
+			Va_h_max,
+			var(h_max),
+			quantile(inds.tagF,0.5));
+		
+		writeFile(paste0(folder, "/trait_stats_",file_name,".txt"), line, append=T);
+	
+	}
+
+
+}
+
+// reset fitness
+mutationEffect(m1) { return 1.0; }
+mutationEffect(m2) { return 1.0; }
+mutationEffect(m3) { return 1.0; }
+
+
+late() {
+	
+	// -------------------------
+	// Record demographic data after selection and resetting of fitness
+	// -------------------------
+	
+	if((sim.cycle % 1000==0 & sim.cycle<Tdelta) | sim.cycle>Tdelta-100){ // every 1000 years or every year for Tdelta - 100		
+		
+		// individual data
+		inds = p1.individuals;
+		ages = inds.age;
+		sizes = inds.tagF;
+		unique_ages = sort(unique(ages));
+		size_trunc = trunc(sizes/10);
+		
+		// counts by size
+		Count = 0;
+		for (size in seq(1,50,by=1))
+			Count = c(Count,length(which(size_trunc==size)));
+		
+		Count_size_class = paste("Count_size",sim.cycle,Count[2:size(Count)-1]);
+		
+		// size by age 
+		mean_size=0;
+		for (age in unique_ages)
+			mean_size = c(mean_size,mean(sizes[ages==age]));
+		
+		mean_size = paste("mean_size",sim.cycle,mean_size[2:size(mean_size)-1]);
+		
+		// counts by age
+		Count = 0;
+		for (age in unique_ages)
+			Count = c(Count,length(which(ages==age)));
+		
+		Count_age = paste("Count_age",sim.cycle,Count[2:size(Count)-1]);
+		
+		// Overall fitness
+		mean_fit= 0;
+		for (age in unique_ages)
+			mean_fit = c(mean_fit,mean(inds.fitnessScaling[ages==age]));
+		
+		mean_fit = paste("mean_fitness",sim.cycle,mean_fit[2:size(mean_fit)-1]);
+		
+		// Write to files
+		writeFile(paste0(folder, "/demographic_data_",file_name,".txt"), mean_size, append=T);
+		writeFile(paste0(folder, "/demographic_data_",file_name,".txt"), Count_age, append=T);
+		writeFile(paste0(folder, "/demographic_data_",file_name,".txt"), Count_size_class, append=T);
+		writeFile(paste0(folder, "/demographic_data_",file_name,".txt"), mean_fit, append=T);
+	
+	}
+	
+	
+	// -------------------------
+	// Check every 1000 cyckles during burnin 
+	// that age and size are within reasonable 
+	// bounds otherwise remove particle
+	// -------------------------
+	if(sim.cycle % 1000==0 & sim.cycle<Tdelta){
+		
+		median_size = quantile(p1.individuals.tagF,0.5);
+		age_q99 = quantile(p1.individuals.age,0.99);
+	
+		if((median_size<60 | median_size>140 | age_q99<5 | age_q99>20)){
+			
+			if(print==1){
+				catn(median_size);
+				catn(age_q99);
+				catn("below epsilon - aborting \n");
+			
+			}
+			
+			deleteFile(paste0(folder, "/demographic_data_",file_name,".txt"));
+			deleteFile(paste0(folder, "/trait_stats_",file_name,".txt"));
+			sim.simulationFinished();
+		}
+	}
+}

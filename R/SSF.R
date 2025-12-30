@@ -33,7 +33,7 @@ pred_years$Fishermen <- as.numeric(formatC(signif(pred_years$Fishermen,digits=4)
 # Truncate extrapolation beyond last observation
 pred_years[1900:2025>2010,Fishermen := pred_years[1900:2025==2010,Fishermen]]
 
-
+pred_years[,Fishermen/max(Fishermen)]
 p_hist <- ggplot() +
   geom_point(
     data = sportfiske_data,
@@ -65,7 +65,7 @@ p_hist <- ggplot() +
 # -------------------------------
 
 vulnerability_clean <- fread(
-  "./empirical_data/Voulnerability_new/vulnerability_clean.csv"
+  "./empirical_data/Voulnerability/vulnerability_clean.csv"
 )
 
 p_vuln <- ggplot(
@@ -103,4 +103,12 @@ ggsave(
   width  = 10,
   height = 5
 )
+
+SSF <- vulnerability_clean[size < 36,round(scaled_vulnerability,3)]
+fix(SSF) ## copy this to REEIM.slim
+
+FishingIntensity <- pred_years[,round(Fishermen/max(Fishermen),3)]
+fix(FishingIntensity) ## copy this to REEIM.slim
+
+
 

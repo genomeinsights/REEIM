@@ -42,7 +42,8 @@ initialize() {
 	//	!Required for ABC pipelines where each run writes to a unique path
 	// As long as this path is valid, you should be able to run this code in SLiM GUI
 	// -----------------------------------------------------------------
-	defineConstant("folder", "~/REEIM/SLiM/REEIM/out/GEN_1");
+	
+	if (!exists("folder")) defineConstant("folder", "~/REEIM/REEIM/SLiM/REEIM/out/GEN_1");
 	
 	
 	// -----------------------------------------------------------------
@@ -114,7 +115,7 @@ initialize() {
 	// -----------------------------------------------------------------
 	if (!exists("rep")) defineConstant("rep", 1);
 	// use 1 to print to console when running in SLiM GUI
-	defineConstant("print", 0); 
+	defineConstant("print", 0);
 	
 	
 	// =================================================================
@@ -126,8 +127,7 @@ initialize() {
 	
 	// fishing starts after burn-in
 	
-	defineConstant("FishingIntensity", c(
-		0, 0.003, 0.004, 0.004, 0.005, 0.005, 0.006, 0.006, 0.007, 0.008,
+	defineConstant("FishingIntensity", c(0.003, 0.004, 0.004, 0.005, 0.005, 0.006, 0.006, 0.007, 0.008,
 		0.008, 0.009, 0.01, 0.011, 0.012, 0.014, 0.015, 0.017, 0.019,
 		0.021, 0.023, 0.025, 0.028, 0.031, 0.034, 0.038, 0.042, 0.046,
 		0.051, 0.056, 0.062, 0.069, 0.076, 0.084, 0.093, 0.103, 0.114,
@@ -135,11 +135,17 @@ initialize() {
 		0.309, 0.34, 0.372, 0.407, 0.443, 0.481, 0.519, 0.557, 0.595,
 		0.633, 0.669, 0.705, 0.739, 0.772, 0.802, 0.831, 0.857, 0.881,
 		0.902, 0.921, 0.937, 0.951, 0.963, 0.972, 0.979, 0.985, 0.989,
-		0.993, 0.994, 0.996, 0.997, 0.997, 0.998, 0.999, 0.999, 1
-		));
+		0.993, 0.994, 0.996, 0.997, 0.997, 0.998, 0.999, 0.999, 1, 1,
+		1, 1, 1, 0.998, 0.996, 0.993, 0.988, 0.982, 0.974, 0.965, 0.954,
+		0.941, 0.927, 0.911, 0.894, 0.875, 0.855, 0.835, 0.813, 0.79,
+		0.768, 0.747, 0.727, 0.71, 0.696, 0.685, 0.677, 0.673, 0.672,
+		0.672, 0.672, 0.672, 0.672, 0.672, 0.672, 0.672, 0.672, 0.672,
+		0.672, 0.672, 0.672, 0.672, 0.672, 0.672));
 	
 	defineConstant("APOT",   Tdelta+size(FishingIntensity));   // assumed present-day observation time
-	defineConstant("projection", 0);   // years after APOT, default 0 for ABC-SMC but needs to be >0 for predictive simulations
+	
+	if (!exists("projection")) defineConstant("projection", 0); // years after APOT, default 0 for ABC-SMC but needs to be >0 for predictive simulations
+	
 	defineConstant("G", APOT + projection);
 	
 	// Size-selectivity curve (10 mm bins)
@@ -173,9 +179,9 @@ initialize() {
 	// =================================================================
 	
 	defineConstant("file_name",
-		paste("S_hmax",S_hmax,"_S_LT",S_LT,"_w",w,
-		"_hlim",hmax_lim,"_LT_lim",LT_lim,
-		"_f",f,"_H",H,"_h_0",h_0,"_g_i",g_i,
+		paste("K",K,"_Ve",Ve,"_sd",sd,"_Shmax",S_hmax,"_SLT",S_LT,"_w",w,
+		"_hlim",hmax_lim,"_LTlim",LT_lim,
+		"_f",f,"_H",H,"_h0",h_0,"_gi",g_i,
 		"_K",K,"_Hx",Hx,"_rep",rep, sep="")
 		);
 	
@@ -475,7 +481,7 @@ late() {
 		
 		median_size = quantile(p1.individuals.tagF,0.5);
 		age_q99 = quantile(p1.individuals.age,0.99);
-	
+		
 		if((median_size<60 | median_size>140 | age_q99<5 | age_q99>20)){
 			
 			if(print==1){

@@ -57,7 +57,7 @@ p_hist <- ggplot() +
   labs(
     x = "Year",
     y = "Number of recreational anglers (Million)",
-    title = "b) Historical fishing intensity"
+    title = "B Historical fishing intensity"
   )
 
 # -------------------------------
@@ -83,7 +83,7 @@ p_vuln <- ggplot(
   labs(
     x = "Body length (cm)",
     y = "Relative fishing vulnerability",
-    title = "a) Size-selective vulnerability"
+    title = "A Size-selective vulnerability"
   )
 
 # -------------------------------

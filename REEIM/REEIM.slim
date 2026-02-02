@@ -271,8 +271,9 @@ reproduction(NULL, "F") {
 	// -------------------------
 	
 	hmax = inds.sumOfMutationsOfType(m3) + hmaxPrior * 0.8;
-	hmax = hmax + rnorm(size(inds), 0, sqrt(Ve) * hmaxPrior);
 	Va_hmax = var(hmax);
+	hmax = hmax + rnorm(size(inds), 0, sqrt(Ve) * hmaxPrior);
+
 	
 	LT = inds.sumOfMutationsOfType(m1) + LTPrior * 0.8;
 	Va_LT = var(LT);

@@ -76,8 +76,8 @@ Analysis and figure-generation scripts.
 -   **`diagnostics.R`**\
     ABC–SMC diagnostics (tolerance reduction, ESS, acceptance rates).
 
--   **`PPC_ABC.R`**\
-    Posterior predictive checks (PPCs) for the first five ABC generations.
+-   **`PPC_ABC_PPS.R`**\
+    Posterior predictive checks (PPCs) for the first five ABC generations as well as for the posterior predictive simulations (PPS)
 
 -   **`PPS.R`**\
     Analysis of posterior predictive simulations, including scenario comparisons.
@@ -121,4 +121,4 @@ The REEIM framework proceeds in three stages:
 ## Contact
 
 For questions regarding the code or analyses, please contact:\
-**[Your name / email]**
+**genomeinsights@gmail.com**

@@ -141,7 +141,7 @@ files <- list.files(run_root, recursive = TRUE, full.names = TRUE, pattern = "de
 
 ## keep baseline simulations
 tmp <- files[grep("K10000_Ve0.05_sd0.05",files)]
-files <- tmp[grep("0.127466",tmp)]
+files <- tmp[grep("0.127",tmp)]
 file <- files[1]
 
 
@@ -187,6 +187,20 @@ p_size <- ggplot() +
 # ---- Extract growth curves ---------------------------------
 
 ## keep baseline simulations
+file <- "./REEIM/scenarios//H0.127_Ve0.05_sd0.05_K10000_Hx0/demographicData_K10000_Ve0.05_sd0.05_Shmax86.4_SLT169_w0.578_f1.38_H0.127_Hx0_rep1.txt"
+get_growth_curve <- function(file, gen) {
+  print(file)
+  
+  sim_data <- fread(file, fill = Inf)
+  
+  mean_size <- sim_data[V1 == "meanSize" & V2 == gen]
+  sizes     <- as.numeric(mean_size[1, 3:ncol(mean_size)])
+  
+  data.table(
+    age  = seq_along(sizes) - 1,
+    size = sizes
+  )
+}
 pp_growth <- rbindlist(lapply(files, get_growth_curve, gen = APOT), idcol = "sim")
 
 # Summarise posterior predictive growth

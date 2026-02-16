@@ -166,7 +166,7 @@ generate_cmd <- function(theta_row, controls,rep,out_folder,
 }
 
 slim_script  <- "./REEIM/REEIM.slim"
-out_root    <-  "./REEIM/scenarios3/"
+out_root    <-  "./REEIM/scenarios/"
 
 dir.create(out_root, recursive = TRUE, showWarnings = FALSE)
 

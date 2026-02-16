@@ -1,7 +1,7 @@
 library(ggplot2)
 library(ggsci)
 library(data.table)
-run_root <- "./REEIM/scenarios3/"
+run_root <- "./REEIM/scenarios/"
 files <- list.files(run_root, recursive = TRUE, full.names = TRUE, pattern = "traitStats")
 
 gens <- seq(9900, 10325, by = 5)
@@ -14,7 +14,7 @@ get_param <- function(key, bname) {
 # Load trait trajectories
 # -------------------------------
 
-fi <- 1
+#fi <- 1
 traj_raw <- rbindlist(lapply(seq_along(files), function(fi) {
   fp <- files[fi]
   bname <- basename(fp)
@@ -159,6 +159,11 @@ ggsave(
 # -------------------------------
 dt_median <- traj_sum[HT=="Typical H"]
 
+dt_median[ Trait ==  "A  Annual growth increment", Trait2:='bold(A)~"Annual growth increment"']
+dt_median[ Trait ==  "B  Size at maturation", Trait2:='bold(B)~"Size at maturation"']
+dt_median[ Trait ==  "C  Parental investment", Trait2:='bold(C)~"Parental investment"']
+
+
 p_pred_growth_traj_median <- ggplot(dt_median, aes(x = Year, group = Hx)) +
   geom_ribbon(
     data = dt_median[Hx==1],
@@ -184,13 +189,7 @@ p_pred_growth_traj_median <- ggplot(dt_median, aes(x = Year, group = Hx)) +
     linewidth = 0.75,
     col="steelblue"
   ) +
-  facet_wrap(~Trait, scales = "free_y", labeller = labeller(
-    Trait = c(
-      "Yearly juvenile size increment (mm)" = "A  Annual growth increment",
-      "Size at maturation (mm)"             = "B  Size at maturation",
-      "Parental investment (unitless)"      = "C  Parental investment"
-    )
-  )) +
+  facet_wrap(~Trait2, scales = "free_y", labeller = label_parsed) +
   geom_vline(xintercept = c(1900, 2025), linetype = 2, colour = "grey40") +
   scale_colour_manual(
     values = pal_jco()(6)[c(1, 2, 4)],
@@ -223,7 +222,7 @@ ggsave(
 #### === violin plots of scenarios === ###
 
 
-run_root <- "./REEIM/scenarios3/"      # folder that contains scenario subfolders
+run_root <- "./REEIM/scenarios/"      # folder that contains scenario subfolders
 t0 <- 10000; t1 <- 10125                      # century window
 trait_names <- c("LT","g","hmax")             # traits to summarize
 
@@ -364,85 +363,6 @@ traj_sum <- traj_base[, .(
 traj_sum[,sd:=factor(sd)]
 traj_sum[,Ve:=factor(Ve)]
 traj_sum[,K:=factor(K)]
-
-ggplot(traj_sum[K==10000 & sd==0.05], aes(x = Year,y = q50,col=Ve,group=Ve)) +
-  geom_line(
-    
-  ) +
-  facet_grid(Trait~HTarget, scales = "free_y") +
-  geom_vline(xintercept = c(1900, 2025), linetype = 2, colour = "grey40") +
-  scale_colour_manual(
-    values = pal_jco()(6)[c(1, 2, 4)],
-    labels = function(x) parse(text = x),
-    name = "Harvest rate (H)"
-  ) +
-  scale_fill_manual(
-    values = pal_jco()(6)[c(1, 2, 4)],
-    labels = function(x) parse(text = x),
-    name = "Harvest rate (H)"
-  ) +
-  labs(x = "Year", y = NULL) +
-  theme_bw(base_size = 15) +
-  theme(
-    aspect.ratio = 0.75,
-    strip.background = element_blank(),
-    strip.text = element_text(hjust = 0),
-    panel.grid.minor = element_blank(),
-    legend.position = "bottom"
-  )
-
-ggplot(traj_sum[K==10000 & Ve==0.05], aes(x = Year,y = q50,col=sd,group=sd)) +
-  geom_line(
-    
-  ) +
-  facet_grid(Trait~HTarget, scales = "free_y") +
-  geom_vline(xintercept = c(1900, 2025), linetype = 2, colour = "grey40") +
-  scale_colour_manual(
-    values = pal_jco()(6)[c(1, 2, 4)],
-    labels = function(x) parse(text = x),
-    name = "Harvest rate (H)"
-  ) +
-  scale_fill_manual(
-    values = pal_jco()(6)[c(1, 2, 4)],
-    labels = function(x) parse(text = x),
-    name = "Harvest rate (H)"
-  ) +
-  labs(x = "Year", y = NULL) +
-  theme_bw(base_size = 15) +
-  theme(
-    aspect.ratio = 0.75,
-    strip.background = element_blank(),
-    strip.text = element_text(hjust = 0),
-    panel.grid.minor = element_blank(),
-    legend.position = "bottom"
-  )
-
-
-ggplot(traj_sum[sd==0.05 & Ve==0.05], aes(x = Year,y = q50,col=K,group=K)) +
-  geom_line(
-    
-  ) +
-  facet_grid(Trait~HTarget, scales = "free_y") +
-  geom_vline(xintercept = c(1900, 2025), linetype = 2, colour = "grey40") +
-  scale_colour_manual(
-    values = pal_jco()(6)[c(1, 2, 4)],
-    labels = function(x) parse(text = x),
-    name = "Harvest rate (H)"
-  ) +
-  scale_fill_manual(
-    values = pal_jco()(6)[c(1, 2, 4)],
-    labels = function(x) parse(text = x),
-    name = "Harvest rate (H)"
-  ) +
-  labs(x = "Year", y = NULL) +
-  theme_bw(base_size = 15) +
-  theme(
-    aspect.ratio = 0.75,
-    strip.background = element_blank(),
-    strip.text = element_text(hjust = 0),
-    panel.grid.minor = element_blank(),
-    legend.position = "bottom"
-  )
 
 ylab_pct_total <- expression(Delta~"trait since onset, "~"%")
 ylab_r_total   <- expression(Delta~"trait since onset, "~log~"scale")

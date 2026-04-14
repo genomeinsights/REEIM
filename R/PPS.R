@@ -1,7 +1,20 @@
-library(ggplot2)
+library(performance)  
+library(knitr)
+library(kableExtra)
 library(ggsci)
-library(patchwork)
+library(scales)
+
+# Core
 library(data.table)
+library(lmerTest)
+library(lmtest)
+library(effectsize)
+library(parallel)
+
+# Modeling
+library(lme4)        # mixed-effects
+library(broom.mixed) # tidy summaries (optional)
+library(patchwork)
 run_root <- "./REEIM/scenarios/"
 files <- list.files(run_root, recursive = TRUE, full.names = TRUE, pattern = "traitStats")
 
@@ -525,11 +538,260 @@ p_Ve_h2 <- make_panel(dt, xvar = "Ve", yvar = "h2_bar",
 
 # ---------- Titles and grid ----------
 
-
-
 pdf("./Figures/Scenarios_summary.pdf",width = 12,height = 10)
 (p_sd_pct+ggtitle("a") | p_K_pct+ggtitle("b") | p_Ve_pct+ggtitle("c")) /
   (p_sd_IA+ggtitle("d") | p_K_IA+ggtitle("e") | p_Ve_IA+ggtitle("f")) /
   (p_sd_h2+ggtitle("g") | p_K_h2+ggtitle("h") | p_Ve_h2+ggtitle("i"))
 dev.off()
 
+
+# ---- 1) FIT MODELS (H_fac included as control variable) ----
+dat_fit2 <- copy(run_summaries)
+dat_fit2[,CV_bar := sqrt(IA_bar)*100]
+dat_fit2[, `:=`(
+  Ve_z   = as.numeric(scale(Ve)),
+  sd_z   = as.numeric(scale(sd)),
+  logK_z = as.numeric(scale(log(K))),
+  H_fac  = factor(HTarget, levels = sort(unique(HTarget)))
+)]
+
+
+get_Rdem <- function(fit) {
+  vc <- as.data.frame(VarCorr(fit))
+  var_re <- vc[vc$grp == "theta_idx", "vcov"]
+  var_res <- attr(VarCorr(fit), "sc")^2
+  round(var_re / (var_re + var_res), 3)
+}
+
+### these are all zero!
+# R_dem_h2 <- get_Rdem(fit_h2)
+# R_dem_IA <- get_Rdem(fit_IA)
+# R_dem_R  <- get_Rdem(fit_r)
+
+# ---- 2) HELPER to extract Ve_z, sd_z, logK_z only (omit H terms) ----
+tidy_fixed <- function(fit, keep_terms) {
+  td <- as.data.table(tidy(fit, Parameters = "fixed", conf.int = TRUE))
+  td <- td[term %in% keep_terms]
+  setnames(td, c("estimate","conf.low","conf.high","std.error"),
+           c("beta","ci_low","ci_high","se"))
+  td[]
+}
+
+# ---- 3) HELPER to get partial eta^2 rows matching predictors ----
+eta_fixed <- function(fit, keep_terms) {
+  et <- as.data.table(eta_squared(fit, partial = TRUE, ci = 0.95,alternative = "two"))
+  et <- et[Parameter %in% keep_terms]
+  setnames(et, c("Parameter","Eta2_partial","CI_low","CI_high"),
+           c("term","eta2p","eta2p_low","eta2p_high"))
+  et[]
+}
+#eta
+# ---- 4) Assemble table blocks for each model ----
+#fit <- fit_r
+assemble_block <- function(fit, model_label, keep_terms,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$")
+) {
+  coefs <- tidy_fixed(fit, keep_terms)
+  etas  <- eta_fixed(fit, keep_terms)
+  r2s   <- r2(fit)
+  out   <- merge(coefs, etas, by = "term", all = TRUE)
+  out[, Term := pretty_map[term]]
+  out[, `:=`(
+    Model   = model_label,
+    beta_fmt = sprintf("%.3f \\;[%.3f,\\; %.3f]", beta, ci_low, ci_high),
+    eta_fmt  = sprintf("%.3f \\;[%.3f,\\; %.3f]", eta2p, eta2p_low, eta2p_high),
+    R2_m = sprintf("%.3f", unname(r2s$R2_marginal)),
+    R2_c = sprintf("%.3f", unname(r2s$R2_conditional))
+  )]
+  out[, .(Model, Term, `Std. $\\beta$ [95\\% CI]` = beta_fmt,
+          `Partial $\\eta^2$ [95\\% CI]` = eta_fmt,
+          `$R^2_m$` = R2_m, `$R^2_c$` = R2_c)]
+}
+
+assemble_block2 <- function(fit, model_label, keep_terms,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$")
+) {
+  coefs <- tidy_fixed(fit, keep_terms)
+  etas  <- eta_fixed(fit, keep_terms)
+  r2s   <- r2(fit)
+  out   <- merge(coefs, etas, by = "term", all = TRUE)
+  out[, Term := pretty_map[term]]
+  out[, `:=`(
+    Model   = model_label,
+    R2_m = unname(r2s$R2_marginal),
+    R2_c = unname(r2s$R2_conditional)
+  )]
+  out
+}
+#tr = "g"
+
+tab_traits <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
+  print(tr)
+  fit_h2 <- lmer(h2_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
+  fit_CV <- lmer(CV_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
+  fit_r  <- lmer(r_total ~ h2_bar + CV_bar  + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
+  
+  
+  keep <- c("Ve_z","sd_z","logK_z")
+  tab_h2 <- assemble_block(fit_h2, model_label = "Mean heritability ($\\overline{h^2}$)", keep,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$"))
+  tab_CV <- assemble_block(fit_CV, model_label = "Mean evolvability ($\\overline{I_A}$)", keep,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$"))
+  keep_terms <- keep <- c("h2_bar", "CV_bar")
+  tab_r <- assemble_block(fit_r,"Log response. ($r_T$)", keep,pretty_map = c(h2_bar="$\\overline{h^2}$", CV_bar="$\\overline{CV_A}$"))
+  #summary(fit_r)
+  tab_all <- rbindlist(list(tab_h2, tab_CV, tab_r), use.names = TRUE, fill = TRUE)
+  
+  # print R2 only once per model block
+  tab_all[, `$R^2_m$` := ifelse(duplicated(Model), "", `$R^2_m$`)]
+  tab_all[, `$R^2_c$` := ifelse(duplicated(Model), "", `$R^2_c$`)]
+  tab_all[,trait:=tr]
+  return(tab_all)
+  
+}))
+
+tab_traits <- tab_traits[,.( Model,Term,trait,`Std. $\\beta$ [95\\% CI]`,`Partial $\\eta^2$ [95\\% CI]`,`$R^2_m$`,`$R^2_c$`)]
+tab_traits[trait=="g",trait:="$g$"]
+tab_traits[trait=="LT",trait:="$L_T$"]
+tab_traits[trait=="hmax",trait:="$h_{max}$"]
+
+#c(g="g",hmax="h[max]",LT="L[T]")
+# ---- 5) LaTeX table (H included but not interpreted) ----
+cap <- paste(
+  "Standardized Parameters of environmental variance (Ve), mutational variance (sd),",
+  "and carrying capacity (log K) on mean heritability ($\\overline{h^2}$), mean coefficient of additive genetic variation",
+  "($\\overline{CV_A}$), and per-generation log response ($R/T$).",
+  "Harvest level ($H_\\mathrm{target}$) was included as a fixed factor in all models to control",
+  "for mean differences among fishing intensities, but its coefficients were not interpreted.",
+  "Entries are standardized coefficients (predictors z-scored) with 95\\% CIs, partial $\\eta^2$ with 95\\% CIs,",
+  "and marginal/conditional $R^2$."
+)
+
+kbl <- kable(tab_traits,
+             format = "latex", booktabs = TRUE, escape = FALSE,
+             col.names = c("Model","Predictor","Trait","Std. $\\beta$ [95\\% CI]",
+                           "Partial $\\eta^2$ [95\\% CI]","$R^2_m$","$R^2_c$"),
+             caption = cap, label = "Parametersizes_main") |>
+  kable_styling(latex_options = c("hold_position")) |>
+  collapse_rows(columns = 1, latex_hline = "none") |>
+  add_footnote(
+    label = "$H_\\mathrm{target}$ (low, medium, high) included as a categorical control; coefficients and interactions not shown.",
+    notation = "symbol",
+    escape = FALSE
+  )
+#kbl
+save_kable(kbl, file = "Table_Parametersizes_main.tex")
+
+
+assemble_block_numeric <- function(fit, model_label, keep_terms,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$")
+) {
+  coefs <- tidy_fixed(fit, keep_terms)
+  etas  <- eta_fixed(fit, keep_terms)
+  r2s   <- r2(fit)
+  out   <- merge(coefs, etas, by = "term", all = TRUE)
+  out[, Term := pretty_map[term]]
+  out[, `:=`(
+    Model   = model_label,
+    R2_m = unname(r2s$R2_marginal),
+    R2_c = unname(r2s$R2_conditional)
+  )]
+  out
+}
+#####
+
+#####
+tab_traits_numeric <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
+  print(tr)
+  fit_h2 <- lmer(h2_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
+  fit_CV <- lmer(CV_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
+  fit_r  <- lmer(r_total ~ h2_bar + CV_bar  + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
+  
+  
+  keep <- c("Ve_z","sd_z","logK_z")
+  tab_h2 <- assemble_block_numeric(fit_h2, model_label = '"a)"~ h^2 %~% V[e] + sd + log(K)', keep,pretty_map = c(Ve_z="V[e]", sd_z="sd", logK_z="log(K)"))
+  tab_CV <- assemble_block_numeric(fit_CV, model_label = '"b)"~ CV[A] %~% V[e] + sd + log(K)', keep,pretty_map = c(Ve_z="V[e]", sd_z="sd", logK_z="log(K)"))
+  keep_terms <- keep <- c("h2_bar", "CV_bar")
+  tab_r <- assemble_block2(fit_r,model_label ='"c)"~ r[T] %~% h^2 + CV[A] + log(K)', keep,pretty_map = c(h2_bar="h^2", CV_bar="CV[A]"))
+  #summary(fit_r)
+  tab_all <- rbindlist(list(tab_h2, tab_CV, tab_r), use.names = TRUE, fill = TRUE)
+  
+  # print R2 only once per model block
+  tab_all[,trait:=tr]
+  return(tab_all)
+  
+}))
+
+dt <- tab_traits_numeric[,.(Model,Term,trait,eta2p,eta2p_low,  eta2p_high)]
+
+dt[, Term := factor(Term, levels = c("V[e]","sd","log(K)","h^2","CV[A]"))]
+
+
+pd <- position_dodge(width = 0.7)
+
+p_eta_summary <- ggplot(dt, aes(x = trait, y = eta2p, fill = Term)) +
+  geom_col(position = pd, width = 0.6, color = "grey25") +
+  geom_errorbar(aes(ymin = eta2p_low, ymax = eta2p_high),
+                position = pd, width = 0.15, color = "grey20") +
+  facet_grid(. ~ Model, labeller = labeller(.cols = label_parsed)) +
+  scale_fill_manual(values = alpha(pal_jco()(10), 1),
+                    labels = function(x) parse(text = x),
+                    name = "Predictor") +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0,1),
+                     name = expression(eta[partial]^2)) +
+  scale_x_discrete(labels = function(x) parse(text = c(g="g", hmax="h[max]", LT="L[T]")[x]),
+                   name = NULL) +
+  theme_bw() +
+  theme(aspect.ratio = 1,
+        strip.text.x = element_text(hjust = 0),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        legend.position = "bottom")
+
+pdf("./Figures/eta_sum.pdf",width = 8,height = 3.5)  
+p_eta_summary
+dev.off()
+
+
+dt_r <- copy(dt)
+
+# Ensure stable legend order
+dt_r[, Term := factor(Term, levels = c("V[e]","sd","log(K)","h^2","CV[A]"))]
+
+# Panel-specific ranking: largest eta2p first per (Model, trait)
+dt_r[, rank_within := -rank(eta2p, ties.method = "first"),
+     by = .(Model, trait)]
+# Build a panel-specific x var combining trait and ranked Term
+dt_r[, x_panel := interaction(trait, Term, drop = TRUE)]
+# To display grouped bars by Term in trait order, we keep x as trait, but order the legend by Term; for
+# within-panel ranking on the x-axis, switch to this:
+dt_r[, Term_panel := factor(Term, levels = unique(Term[order(Model, trait, rank_within)]))]
+
+
+pd <- position_dodge(width = 0.7)
+
+p_eta_ranked <- ggplot(dt_r,
+                       aes(x = trait, y = eta2p, fill = Term_panel)) +
+  geom_col(position = pd, width = 0.6, color = "grey25") +
+  geom_errorbar(aes(ymin = eta2p_low, ymax = eta2p_high),
+                position = pd, width = 0.15, color = "grey20") +
+  facet_grid(. ~ Model, labeller = labeller(.cols = label_parsed)) +
+  scale_fill_manual(
+    values = alpha(pal_jco()(10), 1),
+    labels = function(x) parse(text = as.character(x)),
+    name = "Predictor"
+  ) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0,1),
+                     name = expression(eta[partial]^2)) +
+  scale_x_discrete(labels = function(x) parse(text = c(g="g", hmax="h[max]", LT="L[T]")[x]),
+                   name = NULL) +
+  theme_bw() +
+  theme(
+    aspect.ratio = 1,
+    strip.text.x = element_text(hjust = 0),
+    panel.grid.minor = element_blank(),
+    strip.background = element_blank(),
+    legend.position = "bottom"
+  )
+
+
+pdf("./Figures/eta_sum.pdf",width = 8,height = 3.5)  
+p_eta_ranked
+dev.off()

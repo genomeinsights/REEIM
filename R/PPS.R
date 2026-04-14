@@ -527,12 +527,9 @@ p_Ve_h2 <- make_panel(dt, xvar = "Ve", yvar = "h2_bar",
 
 
 
-pdf("./Figures/Scenarios_summary.pdf",width = 15,height = 12)
+pdf("./Figures/Scenarios_summary.pdf",width = 12,height = 10)
 (p_sd_pct+ggtitle("a") | p_K_pct+ggtitle("b") | p_Ve_pct+ggtitle("c")) /
   (p_sd_IA+ggtitle("d") | p_K_IA+ggtitle("e") | p_Ve_IA+ggtitle("f")) /
   (p_sd_h2+ggtitle("g") | p_K_h2+ggtitle("h") | p_Ve_h2+ggtitle("i"))
 dev.off()
-
-
-
 

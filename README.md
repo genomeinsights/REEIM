@@ -124,4 +124,4 @@ The REEIM framework proceeds in three stages:
 ## Contact
 
 For questions regarding the code or analyses, please contact:\
-[**petri\@genomeinsights.fi**](mailto:petri@genomeinsights.fi){.email}
+[**petri\@genomeinsights.fi**](mailto:petri@genomeinsights.fi)

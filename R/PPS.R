@@ -543,7 +543,9 @@ pdf("./Figures/Scenarios_summary.pdf",width = 12,height = 10)
   (p_sd_IA+ggtitle("d") | p_K_IA+ggtitle("e") | p_Ve_IA+ggtitle("f")) /
   (p_sd_h2+ggtitle("g") | p_K_h2+ggtitle("h") | p_Ve_h2+ggtitle("i"))
 dev.off()
-
+###################
+### ETA SUMMARY ###
+###################
 
 # ---- 1) FIT MODELS (H_fac included as control variable) ----
 dat_fit2 <- copy(run_summaries)
@@ -563,10 +565,6 @@ get_Rdem <- function(fit) {
   round(var_re / (var_re + var_res), 3)
 }
 
-### these are all zero!
-# R_dem_h2 <- get_Rdem(fit_h2)
-# R_dem_IA <- get_Rdem(fit_IA)
-# R_dem_R  <- get_Rdem(fit_r)
 
 # ---- 2) HELPER to extract Ve_z, sd_z, logK_z only (omit H terms) ----
 tidy_fixed <- function(fit, keep_terms) {
@@ -585,9 +583,9 @@ eta_fixed <- function(fit, keep_terms) {
            c("term","eta2p","eta2p_low","eta2p_high"))
   et[]
 }
-#eta
+
 # ---- 4) Assemble table blocks for each model ----
-#fit <- fit_r
+
 assemble_block <- function(fit, model_label, keep_terms,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$")
 ) {
   coefs <- tidy_fixed(fit, keep_terms)
@@ -621,7 +619,7 @@ assemble_block2 <- function(fit, model_label, keep_terms,pretty_map = c(Ve_z="$V
   )]
   out
 }
-#tr = "g"
+
 
 tab_traits <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
   print(tr)
@@ -635,7 +633,6 @@ tab_traits <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
   tab_CV <- assemble_block(fit_CV, model_label = "Mean evolvability ($\\overline{I_A}$)", keep,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$"))
   keep_terms <- keep <- c("h2_bar", "CV_bar")
   tab_r <- assemble_block(fit_r,"Log response. ($r_T$)", keep,pretty_map = c(h2_bar="$\\overline{h^2}$", CV_bar="$\\overline{CV_A}$"))
-  #summary(fit_r)
   tab_all <- rbindlist(list(tab_h2, tab_CV, tab_r), use.names = TRUE, fill = TRUE)
   
   # print R2 only once per model block
@@ -676,7 +673,7 @@ kbl <- kable(tab_traits,
     escape = FALSE
   )
 #kbl
-save_kable(kbl, file = "Table_Parametersizes_main.tex")
+save_kable(kbl, file = "./Tables/Table_Parametersizes_main.tex")
 
 
 assemble_block_numeric <- function(fit, model_label, keep_terms,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$")
@@ -695,7 +692,6 @@ assemble_block_numeric <- function(fit, model_label, keep_terms,pretty_map = c(V
 }
 #####
 
-#####
 tab_traits_numeric <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
   print(tr)
   fit_h2 <- lmer(h2_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
@@ -708,7 +704,6 @@ tab_traits_numeric <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
   tab_CV <- assemble_block_numeric(fit_CV, model_label = '"b)"~ CV[A] %~% V[e] + sd + log(K)', keep,pretty_map = c(Ve_z="V[e]", sd_z="sd", logK_z="log(K)"))
   keep_terms <- keep <- c("h2_bar", "CV_bar")
   tab_r <- assemble_block2(fit_r,model_label ='"c)"~ r[T] %~% h^2 + CV[A] + log(K)', keep,pretty_map = c(h2_bar="h^2", CV_bar="CV[A]"))
-  #summary(fit_r)
   tab_all <- rbindlist(list(tab_h2, tab_CV, tab_r), use.names = TRUE, fill = TRUE)
   
   # print R2 only once per model block
@@ -720,7 +715,6 @@ tab_traits_numeric <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
 dt <- tab_traits_numeric[,.(Model,Term,trait,eta2p,eta2p_low,  eta2p_high)]
 
 dt[, Term := factor(Term, levels = c("V[e]","sd","log(K)","h^2","CV[A]"))]
-
 
 pd <- position_dodge(width = 0.7)
 

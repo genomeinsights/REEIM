@@ -86,6 +86,7 @@ traj_sum <- traj_base[Ve == 0.05 & sd == 0.05 & K == 10000, .(
 ), by = .(Year, HTarget, Hx, Trait)]
 
 traj_sum[, HTarget := round(HTarget, 3)]
+
 traj_sum[, HT := factor(
   c("Low H", "Typical H", "High H")[match(HTarget, c(0.068, 0.127, 0.194))],
   levels = c("Low H", "Typical H", "High H")
@@ -123,7 +124,6 @@ vp_wide <- dcast(
   Ve + sd + K + HTarget + Hx + thetaIdx ~ G,
   value.var = c("Vp_LT", "Vp_g", "Vp_hmax")
 )
-
 
 rates <- merge(
   means_wide,

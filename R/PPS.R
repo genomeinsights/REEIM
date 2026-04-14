@@ -381,6 +381,10 @@ dt[sd==0.05 & Ve==0.05 & K==1,mean(CV_bar)]
 dt[sd==0.05 & Ve==0.05 & K==1,mean(h2_bar)]
 
 #### ==== projected change ==== ####
+run_root <- "./REEIM/scenarios/"
+files <- list.files(run_root, recursive = TRUE, full.names = TRUE, pattern = "traitStats")
+files <- files[grep("Hx1",files)]
+
 run_summaries_proj <- rbindlist(lapply(files,function(fp){
   #cat(fp,"\n")
   bname <<- basename(fp)
@@ -415,7 +419,7 @@ run_summaries_proj[,theta_idx:=as.numeric(factor(paste(HTarget,Ve,sd,K,f,w,SLT,S
 #run_summaries_proj[,table(sd,Ve,K)]
 # ---------- Trait labels as parsed expressions ----------
 # Your dt has trait in {"LT","g","hmax"}.
-dt <- copy(run_summaries_proj)
+dt <- copy(run_summaries_proj[HTarget==0.127])
 dt[,CV_bar := sqrt(IA_bar)*100]
 dt[,K := K/10000]
 dt[, trait_lab := factor(trait,
@@ -450,7 +454,7 @@ ylab_r_total   <- expression(Delta~"trait since onset, "~log~"scale")
 
 # ---------- Generic panel builder (total change focus) ----------
 make_panel <- function(dt, xvar, yvar, base_filter, xlab, ylab,
-                       facet = trait_lab ~ paste("H =",HTarget),
+                       facet = trait_lab ~ .,
                        add_zero_line = FALSE) {
   dd <- copy(dt)[eval(base_filter)]
   stopifnot(nrow(dd) > 0)
@@ -469,7 +473,6 @@ make_panel <- function(dt, xvar, yvar, base_filter, xlab, ylab,
     labs(x = xlab, y = ylab) +
     theme_bw() +
     theme(
-      aspect.ratio = 0.75,
       panel.grid.minor = element_blank(),
       strip.background = element_blank(),
       axis.text.x = element_text(angle = 0, vjust = 0.5)
@@ -490,6 +493,7 @@ base_Ve  <- quote(K == 1 & sd == 0.05)   # vary Ve
 
 # ---------- Build panels: TOTAL change ----------
 # Use pct_total (percent change over the century). If you'd rather log change, swap to yvar="r_total".
+dt[xvar=="sd"]
 p_sd_pct <- make_panel(dt, xvar = "sd", yvar = "pct_total",
                        base_filter = base_sd,
                        xlab = "Mutational SD (sd)", ylab = ylab_pct_total,

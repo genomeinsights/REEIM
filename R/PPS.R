@@ -406,7 +406,7 @@ run_summaries_proj <- rbindlist(lapply(files,function(fp){
   
   dt <- fread(fp)
   if(max(dt$G)==11126){
-    summary <- summarize_century(dt,t0 = 10125,t1=10250)
+    summary <- summarize_century(dt,t0 = 10000,t1=10125)
     cbind(pars,summary$window_summary)  
   }else{
     return(NULL)

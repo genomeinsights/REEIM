@@ -2,3 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
+./REEIM/out_REEIM/
+./REEIM/scenarios*/
+.DS_Store

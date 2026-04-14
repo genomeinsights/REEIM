@@ -82,6 +82,9 @@ Analysis and figure-generation scripts.
 -   **`PPS.R`**\
     Analysis of posterior predictive simulations, including scenario comparisons.
 
+-   **`PPS_haldanes.R`**\
+    Analysis of posterior predictive simulations that includes transformation of evolutionary change to Haldanes.
+
 -   **`posterior_contraction.R`**\
     Visualization of prior–posterior contraction across ABC generations.
 
@@ -121,4 +124,4 @@ The REEIM framework proceeds in three stages:
 ## Contact
 
 For questions regarding the code or analyses, please contact:\
-**genomeinsights@gmail.com**
+[**petri\@genomeinsights.fi**](mailto:petri@genomeinsights.fi){.email}

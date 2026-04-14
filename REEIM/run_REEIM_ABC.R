@@ -139,9 +139,7 @@ summarise_simulations <- function(files,
       )
       
       growth_dt <- merge(age_structure_obs, age_pred, by = "age", all.x = TRUE)
-      
-      
-      
+
       SRMSE_growth <- growth_dt[
         !is.na(size_pred),
         sqrt(mean((size - size_pred)^2)) / sd(size)

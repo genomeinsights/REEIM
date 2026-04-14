@@ -1,5 +1,6 @@
 library(ggplot2)
 library(ggsci)
+library(patchwork)
 library(data.table)
 run_root <- "./REEIM/scenarios/"
 files <- list.files(run_root, recursive = TRUE, full.names = TRUE, pattern = "traitStats")
@@ -147,6 +148,7 @@ p_pred_growth_traj <- ggplot(traj_sum, aes(x = Year, group = Hx)) +
     legend.position = "bottom"
   )
 p_pred_growth_traj
+
 ggsave(
   filename = "./Figures/pred_growth_traj.pdf",
   plot     = p_pred_growth_traj,
@@ -261,6 +263,8 @@ summarize_century <- function(dt, t0, t1) {
   )]
   
   # Helper: log-change between endpoints
+  # v="LT"
+  #plot(x$LT)
   get_r <- function(v) {
     v0 <- x[G == t0, get(v)][1]
     v1 <- x[G == t1, get(v)][1]
@@ -268,7 +272,7 @@ summarize_century <- function(dt, t0, t1) {
     log(v1) - log(v0)
   }
   
-  Tlen <- length(unique(x$G)) - 1L  # should be 100 if generations are contiguous
+  Tlen <- length(unique(x$G)) - 1L 
   
   # Log and percent changes
   r_LT    <- get_r("LT")
@@ -311,7 +315,7 @@ summarize_century <- function(dt, t0, t1) {
 # fp <- files[1]
 # bname <- basename(fp)
 run_summaries <- rbindlist(lapply(files,function(fp){
-  cat(fp,"\n")
+  #cat(fp,"\n")
   bname <<- basename(fp)
   
   pars <- data.table(
@@ -323,23 +327,24 @@ run_summaries <- rbindlist(lapply(files,function(fp){
     f      = get_param("f",bname),
     Ve    = get_param("Ve",bname),
     sd    = get_param("sd",bname),
+    Hx    = get_param("Hx",bname),
     HTarget      = get_param("H",bname),
     K      = get_param("K",bname)
   )
   
   dt <- fread(fp)
   if(max(dt$G)==11126){
-    summary <- summarize_century(dt,t0,t1)
+    summary <- summarize_century(dt,t0=10000,t1=10125)
     cbind(pars,summary$window_summary)  
   }else{
     return(NULL)
   }
 }))
 # Inspect
-run_summaries[,theta_idx:=as.numeric(factor(paste(HTarget,Ve,sd,K,f,w,SLT,Shmax)))] ## each unique combination is a draw, each draw is simulated 5 times
+run_summaries[,theta_idx:=as.numeric(factor(paste(HTarget,Ve,sd,K,f,w,SLT,Shmax,Hx)))] ## each unique combination is a draw, each draw is simulated 5 times
 
 
-run_summaries[,table(sd,Ve,K)]
+run_summaries[,table(sd,Ve,K,Hx)]
 # ---------- Trait labels as parsed expressions ----------
 # Your dt has trait in {"LT","g","hmax"}.
 dt <- copy(run_summaries)
@@ -349,9 +354,72 @@ dt[, trait_lab := factor(trait,
                          levels = c("hmax","g","LT"),
                          labels = c("h[max]","g","L[T]"))]  # parsed by label_parsed
 
+dt[sd==0.05 & Ve==0.05 & K==1 & HTarget==0.1270 & Hx==1,abs(mean(pct_total)),by=trait]
+
+dt[sd==0.05 & Ve==0.05 & K==1& HTarget==0.1270,mean(CV_bar),by=trait]
+dt[sd==0.05 & Ve==0.05 & K==1& HTarget==0.1270,mean(h2_bar),by=trait]
+dt[sd==0.05 & Ve==0.05 & K==1 & HTarget==0.1270,mean(abs(pct_total)),by=trait][,mean(V1)]
+
+dt[sd==0.05 & Ve==0.025 & K==1,mean(CV_bar),by=trait]
+dt[sd==0.05 & Ve==0.025 & K==1,mean(h2_bar),by=trait]
+dt[sd==0.05 & Ve==0.05 & K==1,abs(mean(pct_total)),by=trait][,mean(V1)]
+
+dt[sd==0.05 & Ve==0.05 & K==1,mean(CV_bar)]
+dt[sd==0.05 & Ve==0.05 & K==1,mean(h2_bar)]
+
+#### ==== projected change ==== ####
+run_summaries_proj <- rbindlist(lapply(files,function(fp){
+  #cat(fp,"\n")
+  bname <<- basename(fp)
+  
+  
+  pars <- data.table(
+    Shmax = get_param("Shmax",bname),
+    SLT   = get_param("SLT",bname),
+    w      = get_param("w",bname),
+    hlim  = get_param("hlim",bname),
+    LTlim = get_param("LTlim",bname),
+    f      = get_param("f",bname),
+    Ve    = get_param("Ve",bname),
+    sd    = get_param("sd",bname),
+    Hx    = get_param("Hx",bname),
+    HTarget      = get_param("H",bname),
+    K      = get_param("K",bname)
+  )
+  
+  dt <- fread(fp)
+  if(max(dt$G)==11126){
+    summary <- summarize_century(dt,t0 = 10125,t1=10250)
+    cbind(pars,summary$window_summary)  
+  }else{
+    return(NULL)
+  }
+}))
+# Inspect
+run_summaries_proj[,theta_idx:=as.numeric(factor(paste(HTarget,Ve,sd,K,f,w,SLT,Shmax)))] ## each unique combination is a draw, each draw is simulated 2 times
 
 
+#run_summaries_proj[,table(sd,Ve,K)]
+# ---------- Trait labels as parsed expressions ----------
+# Your dt has trait in {"LT","g","hmax"}.
+dt <- copy(run_summaries_proj)
+dt[,CV_bar := sqrt(IA_bar)*100]
+dt[,K := K/10000]
+dt[, trait_lab := factor(trait,
+                         levels = c("hmax","g","LT"),
+                         labels = c("h[max]","g","L[T]"))]  # parsed by label_parsed
+dt[sd==0.05 & Ve==0.05 & K==1 & HTarget==0.1270 & Hx==1,abs(mean(pct_total)),by=trait]
+#dt[,unique(HTarget)]
 
+dt[sd==0.05 & Ve==0.05 & K==1,mean(CV_bar),by=trait]
+dt[sd==0.05 & Ve==0.05 & K==1,mean(h2_bar),by=trait]
+
+dt[sd==0.05 & Ve==0.025 & K==1,mean(CV_bar),by=trait]
+dt[sd==0.05 & Ve==0.025 & K==1,mean(h2_bar),by=trait]
+dt[sd==0.05 & Ve==0.05 & K==1,abs(mean(pct_total)),by=trait][,mean(V1)]
+
+dt[sd==0.05 & Ve==0.05 & K==1,mean(CV_bar)]
+dt[sd==0.05 & Ve==0.05 & K==1,mean(h2_bar)]
 #### ==== for SM ==== #####
 
 traj_sum <- traj_base[, .(
@@ -454,27 +522,14 @@ p_Ve_h2 <- make_panel(dt, xvar = "Ve", yvar = "h2_bar",
                       base_filter = base_Ve,
                       xlab = expression("Environmental variance ("*V[e]*")"), ylab = expression(bar(h)^2))
 
-dt[sd==0.05 & Ve==0.05 & K==1,mean(CV_bar),by=trait]
-dt[sd==0.05 & Ve==0.05 & K==1,mean(h2_bar),by=trait]
-dt[sd==0.05 & Ve==0.05 & K==1,abs(mean(pct_total)),by=trait][,mean(V1)]
-
-dt[sd==0.05 & Ve==0.025 & K==1,mean(CV_bar),by=trait]
-dt[sd==0.05 & Ve==0.025 & K==1,mean(h2_bar),by=trait]
-dt[sd==0.05 & Ve==0.05 & K==1,abs(mean(pct_total)),by=trait][,mean(V1)]
-
-dt[sd==0.05 & Ve==0.05 & K==1,mean(CV_bar)]
-dt[sd==0.05 & Ve==0.05 & K==1,mean(h2_bar)]
 
 # ---------- Titles and grid ----------
 
 
-row1 <-  grid.arrange(p_sd_pct+ggtitle("a"), p_K_pct+ggtitle("b"), p_Ve_pct+ggtitle("c"),ncol = 3)
-
-row2 <- grid.arrange(p_sd_IA+ggtitle("d"), p_K_IA+ggtitle("e"), p_Ve_IA+ggtitle("f"),ncol = 3)
-
-row3 <- grid.arrange(p_sd_h2+ggtitle("g"), p_K_h2+ggtitle("h"), p_Ve_h2+ggtitle("i"),ncol = 3)
 
 pdf("./Figures/Scenarios_summary.pdf",width = 12,height = 10)
-grid.arrange(row1, row2, row3, ncol = 1)
+(p_sd_pct+ggtitle("a") | p_K_pct+ggtitle("b") | p_Ve_pct+ggtitle("c")) /
+  (p_sd_IA+ggtitle("d") | p_K_IA+ggtitle("e") | p_Ve_IA+ggtitle("f")) /
+  (p_sd_h2+ggtitle("g") | p_K_h2+ggtitle("h") | p_Ve_h2+ggtitle("i"))
 dev.off()
 

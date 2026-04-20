@@ -1,4 +1,4 @@
-library(performance)  
+library(performance)
 library(knitr)
 library(kableExtra)
 library(ggsci)
@@ -10,6 +10,7 @@ library(lmerTest)
 library(lmtest)
 library(effectsize)
 library(parallel)
+library(ggplot2)
 
 # Modeling
 library(lme4)        # mixed-effects
@@ -32,7 +33,7 @@ get_param <- function(key, bname) {
 traj_raw <- rbindlist(lapply(seq_along(files), function(fi) {
   fp <- files[fi]
   bname <- basename(fp)
-  
+
   pars <- data.table(
     Ve = get_param("Ve", bname),
     sd = get_param("sd", bname),
@@ -41,10 +42,10 @@ traj_raw <- rbindlist(lapply(seq_along(files), function(fi) {
     K = get_param("K", bname),
     thetaIdx = fi
   )
-  
+
   dt <- fread(fp)
   dt <- dt[G %in% gens, .(G, LT, g, hmax, h)]
-  
+
   cbind(pars, dt)
 }))
 
@@ -257,14 +258,14 @@ assemble_block2 <- function(fit, model_label, keep_terms,pretty_map = c(Ve_z="$V
   out
 }
 files <- list.files(run_root, recursive = TRUE, full.names = TRUE, pattern = "traitStats")
-#files <- files[grep("Hx1",files)]
+files <- files[grep("Hx1",files)]
 # parse scenario metadata from path
 
 summarize_century <- function(dt, t0, t1) {
   stopifnot(is.data.table(dt), "G" %in% names(dt))
   x <- dt[G >= t0 & G <= t1]
   if (nrow(x) == 0L) stop("No rows in the requested window.")
-  
+
   # Per-generation derived metrics
   x[, `:=`(
     h2_LT   = Va_LT   / Vp_LT,
@@ -274,7 +275,7 @@ summarize_century <- function(dt, t0, t1) {
     h2_hmax = Va_hmax / Vp_hmax,
     IA_hmax = Va_hmax / (hmax^2)
   )]
-  
+
   # Helper: log-change between endpoints
   # v="LT"
   #plot(x$LT)
@@ -284,16 +285,16 @@ summarize_century <- function(dt, t0, t1) {
     if (is.na(v0) || is.na(v1) || v0 <= 0 || v1 <= 0) return(NA_real_)
     log(v1) - log(v0)
   }
-  
-  Tlen <- length(unique(x$G)) - 1L 
-  
+
+  Tlen <- length(unique(x$G)) - 1L
+
   # Log and percent changes
   r_LT    <- get_r("LT")
   r_g     <- get_r("g")
   r_hmax  <- get_r("hmax")
-  
+
   pct <- function(r) 100 * (exp(r) - 1)
-  
+
   out <- data.table(
     trait     = c("LT","g","hmax"),
     r_total   = c(r_LT, r_g, r_hmax),
@@ -316,7 +317,7 @@ summarize_century <- function(dt, t0, t1) {
                   mean(x$S_g,        na.rm=TRUE),
                   mean(x$S_hmax,     na.rm=TRUE))
   )
-  
+
   # Also return the per-generation table with derived quantities for plotting
   list(
     per_generation = x,
@@ -330,7 +331,7 @@ summarize_century <- function(dt, t0, t1) {
 run_summaries <- rbindlist(lapply(files,function(fp){
   #cat(fp,"\n")
   bname <<- basename(fp)
-  
+
   pars <- data.table(
     Shmax = get_param("Shmax",bname),
     SLT   = get_param("SLT",bname),
@@ -344,11 +345,11 @@ run_summaries <- rbindlist(lapply(files,function(fp){
     HTarget      = get_param("H",bname),
     K      = get_param("K",bname)
   )
-  
+
   dt <- fread(fp)
   if(max(dt$G)==11126){
     summary <- summarize_century(dt,t0=10000,t1=10125)
-    cbind(pars,summary$window_summary)  
+    cbind(pars,summary$window_summary)
   }else{
     return(NULL)
   }
@@ -388,8 +389,8 @@ files <- files[grep("Hx1",files)]
 run_summaries_proj <- rbindlist(lapply(files,function(fp){
   #cat(fp,"\n")
   bname <<- basename(fp)
-  
-  
+
+
   pars <- data.table(
     Shmax = get_param("Shmax",bname),
     SLT   = get_param("SLT",bname),
@@ -403,11 +404,11 @@ run_summaries_proj <- rbindlist(lapply(files,function(fp){
     HTarget      = get_param("H",bname),
     K      = get_param("K",bname)
   )
-  
+
   dt <- fread(fp)
   if(max(dt$G)==11126){
     summary <- summarize_century(dt,t0 = 10000,t1=10125)
-    cbind(pars,summary$window_summary)  
+    cbind(pars,summary$window_summary)
   }else{
     return(NULL)
   }
@@ -458,13 +459,13 @@ make_panel <- function(dt, xvar, yvar, base_filter, xlab, ylab,
                        add_zero_line = FALSE) {
   dd <- copy(dt)[eval(base_filter)]
   stopifnot(nrow(dd) > 0)
-  
+
   # Sample sizes for labels
   nlab <- dd[, .N, by = .(x = get(xvar), trait_lab, HTarget)]
   ymin <- dd[, .(ymin = min(get(yvar), na.rm = TRUE)), by = .(x = get(xvar), trait_lab, HTarget)]
   nlab <- nlab[ymin, on = .(x, trait_lab, HTarget)]
   nlab[, y := ymin - 0.02 * abs(ymin)]
-  
+
   p <- ggplot(dd, aes(x = factor(get(xvar)), y = get(yvar))) +
     geom_violin(fill = "grey85", color = "grey40", trim = FALSE) +
     geom_boxplot(width = 0.18, outlier.shape = 16, outlier.size = 0.8, alpha = 0.6) +
@@ -477,9 +478,9 @@ make_panel <- function(dt, xvar, yvar, base_filter, xlab, ylab,
       strip.background = element_blank(),
       axis.text.x = element_text(angle = 0, vjust = 0.5)
     )
-  
+
   if (add_zero_line) p <- p + geom_hline(yintercept = 0, linetype = 2, color = "grey40")
-  
+
   # p + geom_text(data = nlab,
   #               aes(x = factor(x), y = y, label = paste0("n=", N)),
   #               size = 2.6, vjust = 1, inherit.aes = FALSE)
@@ -493,7 +494,7 @@ base_Ve  <- quote(K == 1 & sd == 0.05)   # vary Ve
 
 # ---------- Build panels: TOTAL change ----------
 # Use pct_total (percent change over the century). If you'd rather log change, swap to yvar="r_total".
-dt[xvar=="sd"]
+
 p_sd_pct <- make_panel(dt, xvar = "sd", yvar = "pct_total",
                        base_filter = base_sd,
                        xlab = "Mutational SD (sd)", ylab = ylab_pct_total,
@@ -630,21 +631,21 @@ tab_traits <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
   fit_h2 <- lmer(h2_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
   fit_CV <- lmer(CV_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
   fit_r  <- lmer(r_total ~ h2_bar + CV_bar  + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
-  
-  
+
+
   keep <- c("Ve_z","sd_z","logK_z")
   tab_h2 <- assemble_block(fit_h2, model_label = "Mean heritability ($\\overline{h^2}$)", keep,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$"))
   tab_CV <- assemble_block(fit_CV, model_label = "Mean evolvability ($\\overline{I_A}$)", keep,pretty_map = c(Ve_z="$Ve$", sd_z="$sd$", logK_z="$log K$"))
   keep_terms <- keep <- c("h2_bar", "CV_bar")
   tab_r <- assemble_block(fit_r,"Log response. ($r_T$)", keep,pretty_map = c(h2_bar="$\\overline{h^2}$", CV_bar="$\\overline{CV_A}$"))
   tab_all <- rbindlist(list(tab_h2, tab_CV, tab_r), use.names = TRUE, fill = TRUE)
-  
+
   # print R2 only once per model block
   tab_all[, `$R^2_m$` := ifelse(duplicated(Model), "", `$R^2_m$`)]
   tab_all[, `$R^2_c$` := ifelse(duplicated(Model), "", `$R^2_c$`)]
   tab_all[,trait:=tr]
   return(tab_all)
-  
+
 }))
 
 tab_traits <- tab_traits[,.( Model,Term,trait,`Std. $\\beta$ [95\\% CI]`,`Partial $\\eta^2$ [95\\% CI]`,`$R^2_m$`,`$R^2_c$`)]
@@ -696,24 +697,25 @@ assemble_block_numeric <- function(fit, model_label, keep_terms,pretty_map = c(V
 }
 #####
 
+tr <- "g"
 tab_traits_numeric <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
   print(tr)
   fit_h2 <- lmer(h2_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
   fit_CV <- lmer(CV_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
-  fit_r  <- lmer(r_total ~ h2_bar + CV_bar  + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
-  
-  
+  fit_r  <- lmer(r_total ~ h2_bar + CV_bar + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])
+
+
   keep <- c("Ve_z","sd_z","logK_z")
   tab_h2 <- assemble_block_numeric(fit_h2, model_label = '"a)"~ h^2 %~% V[e] + sd + log(K)', keep,pretty_map = c(Ve_z="V[e]", sd_z="sd", logK_z="log(K)"))
   tab_CV <- assemble_block_numeric(fit_CV, model_label = '"b)"~ CV[A] %~% V[e] + sd + log(K)', keep,pretty_map = c(Ve_z="V[e]", sd_z="sd", logK_z="log(K)"))
-  keep_terms <- keep <- c("h2_bar", "CV_bar")
-  tab_r <- assemble_block2(fit_r,model_label ='"c)"~ r[T] %~% h^2 + CV[A] + log(K)', keep,pretty_map = c(h2_bar="h^2", CV_bar="CV[A]"))
+  keep_terms <- keep <- c("h2_bar", "CV_bar","logK_z")
+  tab_r <- assemble_block2(fit_r,model_label ='"c)"~ r[T] %~% h^2 + CV[A] + log(K)', keep,pretty_map = c(h2_bar="h^2", CV_bar="CV[A]", logK_z="log(K)"))
   tab_all <- rbindlist(list(tab_h2, tab_CV, tab_r), use.names = TRUE, fill = TRUE)
-  
+
   # print R2 only once per model block
   tab_all[,trait:=tr]
   return(tab_all)
-  
+
 }))
 
 dt <- tab_traits_numeric[,.(Model,Term,trait,eta2p,eta2p_low,  eta2p_high)]
@@ -742,7 +744,7 @@ p_eta_summary <- ggplot(dt, aes(x = trait, y = eta2p, fill = Term)) +
         strip.background = element_blank(),
         legend.position = "bottom")
 
-pdf("./Figures/eta_sum.pdf",width = 8,height = 3.5)  
+pdf("./Figures/eta_sum.pdf",width = 8,height = 3.5)
 p_eta_summary
 dev.off()
 
@@ -790,6 +792,6 @@ p_eta_ranked <- ggplot(dt_r,
   )
 
 
-pdf("./Figures/eta_sum.pdf",width = 8,height = 3.5)  
+pdf("./Figures/eta_sum.pdf",width = 8,height = 3.5)
 p_eta_ranked
 dev.off()

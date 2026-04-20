@@ -368,6 +368,10 @@ dt[, trait_lab := factor(trait,
                          levels = c("hmax","g","LT"),
                          labels = c("h[max]","g","L[T]"))]  # parsed by label_parsed
 
+
+dt[sd==0.05 & Ve==0.05 & K==1& HTarget==0.1270,mean(h2_bar),by=trait]
+dt[sd==0.05 & Ve==0.05 & K==1& HTarget==0.1270,sd(h2_bar),by=trait]
+
 dt[sd==0.05 & Ve==0.05 & K==1 & HTarget==0.1270 & Hx==1,abs(mean(pct_total)),by=trait]
 
 dt[sd==0.05 & Ve==0.05 & K==1& HTarget==0.1270,mean(CV_bar),by=trait]

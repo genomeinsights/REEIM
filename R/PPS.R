@@ -697,7 +697,7 @@ assemble_block_numeric <- function(fit, model_label, keep_terms,pretty_map = c(V
 }
 #####
 
-tr <- "g"
+
 tab_traits_numeric <- rbindlist(lapply(c("g","LT","hmax"),function(tr){
   print(tr)
   fit_h2 <- lmer(h2_bar    ~ Ve_z + sd_z + logK_z + H_fac + (1|theta_idx), data = dat_fit2[trait==tr])

@@ -1,0 +1,6 @@
+name,value,description
+LT_obs,169.2,observed mean size at maturation (mm; from the literature)
+observed_data,./empirical_data/observed_data.RData,R data file with age_structure_obs and size_structure_obs
+kde_bw,2,bandwidth (cm) of the size-distribution kernel density
+kde_from,6,lower end (cm) of the size-distribution comparison
+kde_to,40,upper end (cm) of the size-distribution comparison

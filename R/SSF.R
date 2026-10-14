@@ -104,11 +104,15 @@ ggsave(
   height = 5
 )
 
-SSF <- vulnerability_clean[size < 36,round(scaled_vulnerability,3)]
-fix(SSF) ## copy this to REEIM.slim
+# -------------------------------
+# Write the inputs read by REEIM.slim
+# -------------------------------
 
-FishingIntensity <- pred_years[,round(Fishermen/max(Fishermen),3)]
-fix(FishingIntensity) ## copy this to REEIM.slim
+SSF <- vulnerability_clean[size < 36, .(size_class = size, vulnerability = round(scaled_vulnerability,3))]
+fwrite(SSF, "./REEIM/input/perch/selectivity.csv")
+
+FishingIntensity <- pred_years[, .(year = Year, intensity = round(Fishermen/max(Fishermen),3))]
+fwrite(FishingIntensity, "./REEIM/input/perch/fishing_intensity.csv")
 
 
 

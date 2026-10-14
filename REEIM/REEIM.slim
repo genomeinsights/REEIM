@@ -45,69 +45,72 @@ initialize() {
 	
 	if (!exists("folder")) defineConstant("folder", "~/REEIM/REEIM/SLiM/REEIM/out/tst");
 	
+	// -----------------------------------------------------------------
+	// Input files describing the study system (set externally by R / bash)
+	//	inputDir holds:
+	//	  parameters.csv         species and system constants (name,value)
+	//	  fishing_intensity.csv  relative fishing intensity per year after burn-in
+	//	  selectivity.csv        size-selectivity curve (size class, vulnerability)
+	//	Each file can also be pointed to directly with -d paramFile=, -d fishingFile=
+	//	or -d selectivityFile=. Any constant given with -d overrides parameters.csv.
+	// -----------------------------------------------------------------
 	
-	// -----------------------------------------------------------------
-	// Inferred parameters (overwritten via -d flags if present)
-	// -----------------------------------------------------------------
-	if (!exists("f"))      defineConstant("f", 0.8);     // fecundity scaling
-	if (!exists("w"))      defineConstant("w", 0.3);     // cost of fecundity
-	if (!exists("Shmax")) defineConstant("Shmax", 90); // directional viability cost
-	if (!exists("SLT"))   defineConstant("SLT", 180);
-	if (!exists("H"))      defineConstant("H", 0.3);     // terminal harvest intensity
-	
-	
-	// -----------------------------------------------------------------
-	// Fixed biological limits
-	// -----------------------------------------------------------------
-	if (!exists("LTLim"))   defineConstant("LTLim", 250);
-	if (!exists("hmaxLim")) defineConstant("hmaxLim", 0);
-	if (!exists("K"))        defineConstant("K", 10000);
-	if (!exists("maxAge"))  defineConstant("maxAge", 25);
+	// The default is relative to the folder SLiM is started from, i.e. the repository
+	// root, which is where all R drivers run it from.
+	if (!exists("inputDir"))        defineConstant("inputDir", "./REEIM/input/perch");
+	if (!exists("paramFile"))       defineConstant("paramFile", paste0(inputDir, "/parameters.csv"));
+	if (!exists("fishingFile"))     defineConstant("fishingFile", paste0(inputDir, "/fishing_intensity.csv"));
+	if (!exists("selectivityFile")) defineConstant("selectivityFile", paste0(inputDir, "/selectivity.csv"));
 	
 	
 	// -----------------------------------------------------------------
-	// Reference trait values (baseline estimates)
+	// Species and system constants from parameters.csv
 	// -----------------------------------------------------------------
-	// These values are NOT Bayesian priors.
-	// They represent empirically and independently derived reference
-	// estimates for growth and life-history traits that are known to
-	// reproduce realistic growth trajectories.
-	//
-	// These reference values:
-	//   • set biologically meaningful trait scales,
-	//   • initialize the population near plausible states,
-	//   • and are used to scale mutational effects.
-	//
-	// They do NOT constrain posterior outcomes; all traits evolve freely
-	// under selection and inheritance.
-	if (!exists("LTPrior"))   defineConstant("LTPrior", 169.2);
-	if (!exists("gPrior"))     defineConstant("gPrior", 0.24);
-	if (!exists("hmaxPrior")) defineConstant("hmaxPrior", 62.0);
+	// Values without a decimal point or exponent are read as integers,
+	// all others as floats, matching how SLiM parses -d values.
+	params = readCSV(paramFile, colTypes="ss?", comment="#");
+	paramNames = params.getValue("name");
+	paramValues = params.getValue("value");
 	
+	for (i in seqAlong(paramNames)) {
+		value = paramValues[i];
+		if (exists(paramNames[i])) next;   // -d on the command line wins
+		if (strfind(value, ".") < 0 & strfind(value, "e") < 0 & strfind(value, "E") < 0)
+			defineConstant(paramNames[i], asInteger(value));
+		else
+			defineConstant(paramNames[i], asFloat(value));
+	}
 	
-	// -----------------------------------------------------------------
-	// Growth & density dependence parameters
-	// -----------------------------------------------------------------
-	if (!exists("gi"))   defineConstant("gi", 0.24);  // immature growth cost
-	if (!exists("h0"))   defineConstant("h0", 1.72);  // first-year multiplier
-	if (!exists("gamma")) defineConstant("gamma", 0.18);
-	if (!exists("delta")) defineConstant("delta", 0.57);
-	if (!exists("DK"))   defineConstant("DK", 8.67);
+	required = c(
+		"f", "w", "Shmax", "SLT", "H",                        // inferred parameters
+		"LTLim", "hmaxLim", "K", "maxAge",                    // fixed biological limits
+		"LTPrior", "gPrior", "hmaxPrior",                     // reference trait values
+		"gi", "h0", "gamma", "delta", "DK",                   // growth & density dependence
+		"sd", "u", "Ve",                                      // genetics
+		"a", "b",                                             // length-weight relationship
+		"Tdelta", "initAgeMax",                               // burn-in and initial population
+		"burninMedianSizeMin", "burninMedianSizeMax",         // burn-in abort limits
+		"burninAgeQ99Min", "burninAgeQ99Max",
+		"selBinWidth", "selBelow", "selAbove");               // size selectivity
 	
+	for (name in required)
+		if (!exists(name))
+			stop("Parameter " + name + " is missing from " + paramFile + " and was not given with -d");
 	
-	// -----------------------------------------------------------------
-	// Genetics
-	// -----------------------------------------------------------------
-	if (!exists("sd")) defineConstant("sd", 0.05);  // mutational SD (scaled)
-	if (!exists("u"))  defineConstant("u", 1e-6);   // mutation rate
-	if (!exists("Ve")) defineConstant("Ve", 0.05);  // environmental variance
-	
-	
-	// -----------------------------------------------------------------
-	// Length–weight relationship
-	// -----------------------------------------------------------------
-	if (!exists("a")) defineConstant("a", 3.958007e-6);
-	if (!exists("b")) defineConstant("b", 3.186062);
+	// The parameters are documented in parameters.csv. Briefly:
+	//   f, w, Shmax, SLT, H : inferred by ABC-SMC (fecundity scaling, cost of
+	//                         fecundity, viability costs, terminal harvest intensity)
+	//   LTLim, hmaxLim, K, maxAge : fixed biological limits
+	//   LTPrior, gPrior, hmaxPrior : reference trait values. These are NOT Bayesian
+	//                         priors. They are empirically and independently derived
+	//                         reference estimates that set biologically meaningful
+	//                         trait scales, initialize the population near plausible
+	//                         states and scale mutational effects. They do NOT
+	//                         constrain posterior outcomes; all traits evolve freely
+	//                         under selection and inheritance.
+	//   gi, h0, gamma, delta, DK : growth and density dependence
+	//   sd, u, Ve : mutational SD (scaled), mutation rate, environmental variance
+	//   a, b : length-weight relationship
 	
 	
 	// -----------------------------------------------------------------
@@ -122,25 +125,16 @@ initialize() {
 	//  Historical fishing trajectory
 	// =================================================================
 	
-	defineConstant("Tdelta", 10000);   // duration of burn-in
+	// Tdelta (duration of burn-in) is read from parameters.csv
 	if (!exists("Hx")) defineConstant("Hx", 1); // multiplier after APOT (Hx=0 = fishing stops)
 	
 	// fishing starts after burn-in
-	
-	defineConstant("FishingIntensity", c(0.003, 0.004, 0.004, 0.005, 0.005, 0.006, 0.006, 0.007, 0.008,
-		0.008, 0.009, 0.01, 0.011, 0.012, 0.014, 0.015, 0.017, 0.019,
-		0.021, 0.023, 0.025, 0.028, 0.031, 0.034, 0.038, 0.042, 0.046,
-		0.051, 0.056, 0.062, 0.069, 0.076, 0.084, 0.093, 0.103, 0.114,
-		0.126, 0.14, 0.155, 0.171, 0.189, 0.209, 0.231, 0.255, 0.281,
-		0.309, 0.34, 0.372, 0.407, 0.443, 0.481, 0.519, 0.557, 0.595,
-		0.633, 0.669, 0.705, 0.739, 0.772, 0.802, 0.831, 0.857, 0.881,
-		0.902, 0.921, 0.937, 0.951, 0.963, 0.972, 0.979, 0.985, 0.989,
-		0.993, 0.994, 0.996, 0.997, 0.997, 0.998, 0.999, 0.999, 1, 1,
-		1, 1, 1, 0.998, 0.996, 0.993, 0.988, 0.982, 0.974, 0.965, 0.954,
-		0.941, 0.927, 0.911, 0.894, 0.875, 0.855, 0.835, 0.813, 0.79,
-		0.768, 0.747, 0.727, 0.71, 0.696, 0.685, 0.677, 0.673, 0.672,
-		0.672, 0.672, 0.672, 0.672, 0.672, 0.672, 0.672, 0.672, 0.672,
-		0.672, 0.672, 0.672, 0.672, 0.672, 0.672));
+	// Relative fishing intensity, one row per year, scaled to a maximum of 1.
+	// The first row is the year before fishing starts (cycle Tdelta) and the
+	// last row is the present-day observation year.
+	defineConstant("FishingIntensity", readCSV(fishingFile, colTypes="?f").getValue("intensity"));
+	if (size(FishingIntensity) < 2)
+		stop("fishing_intensity.csv must have at least two rows: " + fishingFile);
 	
 	defineConstant("APOT",   Tdelta+size(FishingIntensity));   // assumed present-day observation time
 	
@@ -148,13 +142,17 @@ initialize() {
 	
 	defineConstant("G", APOT + projection);
 	
-	// Size-selectivity curve (10 mm bins)
-	defineConstant("SSF", c(
-		0, 0, 0.001, 0.002, 0.003, 0.004, 0.007, 0.01, 0.014, 0.021,
-		0.032, 0.048, 0.07, 0.103, 0.147, 0.205, 0.277, 0.362, 0.456,
-		0.553, 0.646, 0.73, 0.801, 0.858, 0.901, 0.932, 0.954, 0.972,
-		0.986, 1
-		));
+	// Size-selectivity curve. size_class is body length in units of selBinWidth
+	// (10 mm bins for perch: class 6 is 60-69 mm). Fish smaller than the first
+	// class get vulnerability selBelow and fish larger than the last class get
+	// selAbove (set selAbove to 0 for a dome-shaped gillnet curve that ends at 0).
+	selectivity = readCSV(selectivityFile, colTypes="if");
+	defineConstant("SSFClass", selectivity.getValue("size_class"));
+	defineConstant("SSF", selectivity.getValue("vulnerability"));
+	if (!identical(SSFClass, seqLen(size(SSFClass)) + SSFClass[0]))
+		stop("size_class in selectivity.csv must be consecutive integers: " + selectivityFile);
+	
+	
 	
 	
 	
@@ -234,8 +232,8 @@ reproduction(NULL, "F") {
 1 early() {
 	sim.addSubpop("p1", K);
 	
-	// Random age structure (0–20 years)
-	p1.individuals.age = rdunif(K, 0, 20);
+	// Random age structure (0–initAgeMax years)
+	p1.individuals.age = rdunif(K, 0, initAgeMax);
 	
 	// Initial size proxy for first reproduction
 	p1.individuals.tagF = p1.individuals.age * hmaxPrior / 5;
@@ -335,12 +333,12 @@ reproduction(NULL, "F") {
 	
 	if (sim.cycle > Tdelta) {
 		
-		size_class = trunc(inds.tagF / 10);
-		fishing_mort = rep(0.0, size(size_class));
+		size_class = trunc(inds.tagF / selBinWidth);
+		fishing_mort = rep(asFloat(selBelow), size(size_class));
 		
-		idx = match(asInteger(size_class), 6:35); // speicified for individuals between 6 and 35 cm
+		idx = match(asInteger(size_class), SSFClass); // classes covered by selectivity.csv
 		fishing_mort[idx > -1] = SSF[idx[idx > -1]];
-		fishing_mort[size_class > 35] = 1;
+		fishing_mort[size_class > SSFClass[size(SSFClass)-1]] = asFloat(selAbove);
 		
 		weights = a * inds.tagF^b;
 		weights = weights / sum(weights);
@@ -478,7 +476,7 @@ late() {
 		median_size = quantile(p1.individuals.tagF,0.5);
 		age_q99 = quantile(p1.individuals.age,0.99);
 		
-		if((median_size<40 | median_size>160 | age_q99<4 | age_q99>25)){
+		if((median_size<burninMedianSizeMin | median_size>burninMedianSizeMax | age_q99<burninAgeQ99Min | age_q99>burninAgeQ99Max)){
 			
 			if(print==1){
 				catn(median_size);

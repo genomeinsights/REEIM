@@ -35,11 +35,16 @@ These inputs define the **fixed fishing regime**:
 
 These components are treated as fixed (non-inferred) in all simulations.
 
+They are written to `./REEIM/input/perch/` (`selectivity.csv`, `fishing_intensity.csv`).
+
 ------------------------------------------------------------------------
 
 ### `./REEIM/`
 
 Core simulation and inference pipeline.
+
+-   **`input/`**\
+    One folder per study system with everything that is specific to it: species constants, burn-in limits, fishing trajectory, selectivity curve, priors and ABC settings. `input/perch/` holds the values used in the paper, and `input/README.md` explains how to set up a new system.
 
 -   **`REEIM.slim`**\
     Eco-genetic individual-based model implemented in SLiM.\

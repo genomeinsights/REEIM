@@ -37,6 +37,10 @@ if(length(args)>0){
   cores <- args[2]
 } 
 
+## Folder with the input files describing the study system (see ./REEIM/input/README.md).
+## Pass it as the third command-line argument to run another system.
+input_dir <- if (length(args) > 2) args[3] else "./REEIM/input/perch"
+
 
 #setwd("~/REEIM/REEIM/")
 ## =======================
@@ -54,6 +58,14 @@ get_param <- function(key, bname) {
 
 
 
+#-----------------------------------------------------------
+# Read a name,value input file into a named list
+#-----------------------------------------------------------
+read_settings <- function(file) {
+  dt <- read.csv(file, colClasses = "character", comment.char = "#", strip.white = TRUE)
+  setNames(as.list(dt$value), dt$name)
+}
+
 ## build SLiM command
 build_slim_cmd <- function(theta, sim_parameters, script,out_folder) {
   
@@ -65,7 +77,10 @@ build_slim_cmd <- function(theta, sim_parameters, script,out_folder) {
     as.character(sim_parameters)
   )
   
-  paste("slim ", paste0('-d folder=\\"', normalizePath(out_folder), '\\"'), paste(args, collapse = " "), script)
+  paste("slim ",
+        paste0('-d folder=\\"', normalizePath(out_folder), '\\"'),
+        paste0('-d inputDir=\\"', normalizePath(input_dir), '\\"'),
+        paste(args, collapse = " "), script)
 }
 
 #-----------------------------------------------------------
@@ -189,53 +204,43 @@ proposal_density <- function(theta, centers, weights, cov_mat) {
 ##  Global configuration
 ## =======================
 
-slim_script  <- "./REEIM/REEIM.slim" ## the size selectivity and historical fishing intensity are hard coded in the REEIM.slim file and come from file /R/SSF.R
+slim_script  <- "./REEIM/REEIM.slim" ## the size selectivity and historical fishing intensity are read from input_dir (created by /R/SSF.R for perch)
 base_folder  <- "./REEIM/out_REEIM/"
 n_particles  <- 2500
 Gens         <- 5
-APOT         <- 10125        # in simulation cycles, the actual APOT is determined by the historical fishing intensity defined in REEIM.slim
+
+## System description (input_dir)
+model_parameters <- read_settings(file.path(input_dir, "parameters.csv"))   # constants read by REEIM.slim
+abc_settings     <- read_settings(file.path(input_dir, "abc_settings.csv"))
+fishing          <- fread(file.path(input_dir, "fishing_intensity.csv"))
+priors           <- fread(file.path(input_dir, "priors.csv"))
+
+## Cycle at which the observed (present-day) data are compared with the simulations:
+## the last year of the fishing trajectory, i.e. burn-in + number of fishing years - 1
+## (10125 for perch: 10000 burn-in cycles and 126 rows from 1900 to 2025)
+APOT         <- as.numeric(model_parameters$Tdelta) + nrow(fishing) - 1
 alpha        <- 0.2          # cutoff for accepted particles
 c            <- 2
 
 ## Observed data
-load("./empirical_data/observed_data.RData")  # age_structure_obs, size_structure_obs, created by script /empirical_data/R/get_observed_data.R
-LT_obs <- 169.2              # comes from litterature
+load(abc_settings$observed_data)  # age_structure_obs, size_structure_obs; for perch created by script /empirical_data/R/get_observed_data.R
+LT_obs <- as.numeric(abc_settings$LT_obs)              # comes from litterature
+kde_bw   <- as.numeric(abc_settings$kde_bw)            # bandwidth and range (cm) of the size-distribution comparison
+kde_from <- as.numeric(abc_settings$kde_from)
+kde_to   <- as.numeric(abc_settings$kde_to)
 
-## Priors
+## Priors (uniform; the order of the rows in priors.csv sets the parameter order)
 
-prior_lim <- list(w=c(0.1,0.6), ## cost for fecundity
-                  Shmax=c(60,120), ## upper limit for hmax
-                  SLT=c(100,250), ## lower limit for size at maturity
-                  f=c(0.1,1.5), ## scaling factor for fecundity that determines strength of density dependence
-                  H=c(0,0.3)) ## Harvest rate
+prior_lim <- setNames(lapply(seq_len(nrow(priors)), function(i) c(priors$lower[i], priors$upper[i])),
+                      priors$parameter)
 
-## Fixed simulation parameters for ABC-SMC
-## NA means the parameter is not fixed
-## the REEIM.slim already has the default values and REEIM.slim also contains some default values that are not specified here
+## Simulation parameters passed to SLiM for ABC-SMC
+## NA means the parameter is inferred and set from theta
+## All fixed parameters (K, growth, genetics, length-weight, burn-in limits, ...) are read
+## by REEIM.slim from parameters.csv in input_dir; add a column here only to override one
 sim_parameters <- data.table(
   ## used for inference
-  w           = NA,
-  Shmax       = NA,
-  SLT         = NA,
-  f           = NA,
-  H           = NA,
-  ## fixed params for ABC-SMC
-  K           = 10000,
-  LTLim       = 250,
-  hmaxLim     = 0,
-  gi          = 0.24,
-  h0          = 1.72,
-  gPrior      = 0.24,
-  LTPrior     = 169.2,
-  hmaxPrior   = 62.0,
-  sd          = 0.05,
-  u           = 1e-6,
-  Ve          = 0.05,
-  gamma       = 0.18,
-  delta       = 0.57,
-  DK          = 8.67,
-  a           = 3.95801e-6,
-  b           = 3.18606,
+  t(setNames(rep(NA, nrow(priors)), priors$parameter)),
   projection  = 0 ## no projection for ABC-SMC, so Hx also not relevant to set (only affects sims after APOT)
 )
 
@@ -312,6 +317,9 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
     files,
     par_names=par_names,
     APOT,
+    BW = kde_bw,
+    from = kde_from,
+    to = kde_to,
     age_structure_obs = age_structure_obs,
     size_structure_obs = size_structure_obs
   )

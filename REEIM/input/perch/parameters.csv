@@ -1,0 +1,44 @@
+name,value,description
+# Species- and system-specific constants for REEIM.slim (perch, Sweden).
+# Any value given on the command line with -d overrides the value here.
+# Write integers without a decimal point (e.g. 10000) and reals with one (e.g. 62.0).
+#
+# Inferred parameters: defaults for standalone runs only (ABC-SMC sets them with -d)
+f,0.8,fecundity scaling
+w,0.3,cost of fecundity
+Shmax,90,directional viability cost on h_max
+SLT,180,directional viability cost on L_T
+H,0.3,terminal harvest intensity (fraction of biomass)
+# Fixed biological limits
+LTLim,250,L_T above which there is no viability cost (mm)
+hmaxLim,0,h_max below which there is no viability cost (mm/yr)
+K,10000,carrying capacity
+maxAge,25,maximum age (years)
+# Reference trait values (scale mutational effects and initial state; not priors)
+LTPrior,169.2,reference size at maturation L_T (mm)
+gPrior,0.24,reference reproductive investment g
+hmaxPrior,62.0,reference maximum growth rate h_max (mm/yr)
+# Growth and density dependence (from the deterministic Lester fit)
+gi,0.24,immature growth cost
+h0,1.72,first-year growth multiplier
+gamma,0.18,density-dependence scale
+delta,0.57,density-dependence exponent
+DK,8.67,density at K
+# Genetics
+sd,0.05,mutational SD (relative to reference trait values)
+u,1e-6,mutation rate after cycle 2000
+Ve,0.05,environmental variance (relative)
+# Length-weight relationship W = a * L^b (L in mm)
+a,3.95801e-6,length-weight coefficient
+b,3.18606,length-weight exponent
+# Burn-in and initial population
+Tdelta,10000,burn-in length (cycles) before fishing starts
+initAgeMax,20,initial ages drawn uniformly from 0 to this value
+burninMedianSizeMin,40,abort if median size (mm) falls below this at a burn-in check
+burninMedianSizeMax,160,abort if median size (mm) exceeds this at a burn-in check
+burninAgeQ99Min,4,abort if the 99th age percentile falls below this at a burn-in check
+burninAgeQ99Max,25,abort if the 99th age percentile exceeds this at a burn-in check
+# Size selectivity (classes are read from selectivity.csv)
+selBinWidth,10,width of the size classes in selectivity.csv (mm)
+selBelow,0,vulnerability of fish smaller than the first class
+selAbove,1,vulnerability of fish larger than the last class

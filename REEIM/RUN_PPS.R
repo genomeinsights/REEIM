@@ -155,17 +155,24 @@ generate_cmd <- function(theta_row, controls,rep,out_folder,
     sd     = controls$sd,
     Hx     = controls$Hx,
     projection     = controls$projection,
-    rep    = rep
+    rep    = rep,
+    ## Length-weight values the posterior predictive simulations were run with (the
+    ## REEIM.slim defaults at the time). ABC-SMC used a = 3.95801e-6, b = 3.18606,
+    ## which are the values in parameters.csv; drop these two lines to use those.
+    a      = 3.958007e-6,
+    b      = 3.186062
   )
   
   # -d key=value string
   kv <- paste(paste0("-d ", names(sim_parameters), "=", sim_parameters), collapse = " ")
   
-  cmd <- paste("slim ", paste0('-d folder=\\"', normalizePath(out_folder), '\\"'), kv, slim_script)
+  cmd <- paste("slim ", paste0('-d folder=\\"', normalizePath(out_folder), '\\"'),
+               paste0('-d inputDir=\\"', normalizePath(input_dir), '\\"'), kv, slim_script)
   return(cmd)
 }
 
 slim_script  <- "./REEIM/REEIM.slim"
+input_dir    <- "./REEIM/input/perch"   # system description: parameters, fishing trajectory, selectivity
 out_root    <-  "./REEIM/scenarios/"
 
 dir.create(out_root, recursive = TRUE, showWarnings = FALSE)

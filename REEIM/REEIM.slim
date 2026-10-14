@@ -347,8 +347,10 @@ reproduction(NULL, "F") {
 		weights = weights / sum(weights);
 		
 		// scaling factor to ensure H is expressed as % of biomass
-		Hk = sum(weights * fishing_mort) / H /
-			FishingIntensity[size(FishingIntensity)-1];
+		// removal at year t = H * FishingIntensity[t] / FishingIntensity[last] of biomass,
+		// so exactly H at terminal intensity (was H * FI[t] * FI[last])
+		Hk = sum(weights * fishing_mort) *
+			FishingIntensity[size(FishingIntensity)-1] / H;
 		
 		fishing_fitness =
 			1 - fishing_mort / Hk *

@@ -3,4 +3,4 @@ w,0.1,0.6,cost for fecundity
 Shmax,60,120,upper limit for hmax
 SLT,100,250,lower limit for size at maturity
 f,0.1,1.5,scaling factor for fecundity that determines strength of density dependence
-H,0,0.3,harvest rate
+H,0,0.2,harvest rate

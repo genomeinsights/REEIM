@@ -2,6 +2,8 @@ library(data.table)
 library(parallel)
 library(mvtnorm)
 
+`%||%` <- function(a, b) if (is.null(a)) b else a  # base R has this only from 4.4.0
+
 effective_sample_size <- function(w) 1 / sum((w / sum(w))^2)
 
 

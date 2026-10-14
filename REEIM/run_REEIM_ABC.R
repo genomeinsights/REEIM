@@ -34,12 +34,16 @@ library(ggplot2)
 args <- commandArgs(trailingOnly = TRUE) 
 if(length(args)>0){
   setwd(args[1])
-  cores <- args[2]
+  cores <- as.integer(args[2])
 } 
+if (!exists("cores")) cores <- max(1, parallel::detectCores() - 1)
 
 ## Folder with the input files describing the study system (see ./REEIM/input/README.md).
 ## Pass it as the third command-line argument to run another system.
 input_dir <- if (length(args) > 2) args[3] else "./REEIM/input/perch"
+
+## Output folder (fourth argument), so that several systems can run from one copy of the repository
+base_folder <- if (length(args) > 3) args[4] else "./REEIM/out_REEIM/"
 
 
 #setwd("~/REEIM/REEIM/")
@@ -217,8 +221,8 @@ draw_proposal <- function(centers, weights, cov_mat) {
 ## =======================
 
 slim_script  <- "./REEIM/REEIM.slim" ## the size selectivity and historical fishing intensity are read from input_dir (created by /R/SSF.R for perch)
-base_folder  <- "./REEIM/out_REEIM/"
 n_particles  <- 2500
+n_batch      <- max(100, 2 * cores)  # simulations started per round; keeps all cores busy on large nodes
 Gens         <- 5
 
 ## System description (input_dir)
@@ -295,7 +299,7 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
     message(length(list.files(out_folder, pattern = "trait"))," out of ", n_particles, " particles are done")
     
     if(GEN==1){
-      cmds <- replicate(100, {
+      cmds <- replicate(n_batch, {
         theta <- sapply(prior_lim, function(x) format(runif(1, x[1], x[2]),digits=3))
         build_slim_cmd(theta, sim_parameters, slim_script,out_folder)
       })
@@ -303,7 +307,7 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
       prev_centers <- as.matrix(REEIM_res$particles[[GEN-1]][keep == TRUE, ..par_names])
       prev_weights <- REEIM_res$particles[[GEN-1]][keep == TRUE, weights]
       prev_cov     <- REEIM_res$KDE[[GEN-1]]$H*c   # same kernel as the importance weights below
-      cmds <- replicate(100, {
+      cmds <- replicate(n_batch, {
         theta_cand <- draw_proposal(prev_centers, prev_weights, prev_cov)
         
         ## redraw if out of bounds     
@@ -318,8 +322,9 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
       
     }
     
-    writeLines(cmds, "cmds.txt")
-    system(paste("cat cmds.txt | parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
+    cmd_file <- file.path(out_folder, "cmds.txt")  # per run, so parallel ABCs don't overwrite each other's list
+    writeLines(cmds, cmd_file)
+    system(paste("cat", shQuote(cmd_file), "| parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
     
   }
   

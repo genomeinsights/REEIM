@@ -1,0 +1,12 @@
+# Software for running REEIM on a cluster:  conda env create -f REEIM/slurm/environment.yml
+name: reeim
+channels:
+  - conda-forge
+dependencies:
+  - slim=5.0
+  - parallel
+  - r-base>=4.3
+  - r-data.table
+  - r-ks
+  - r-mvtnorm
+  - r-ggplot2

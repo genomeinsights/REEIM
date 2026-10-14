@@ -39,7 +39,7 @@ resample_index <- function(w, N) {
 
 
 # Suppose 'particles' is your list from ABC; take the last gen:
-base_folder  <- "./REEIM/out_REEIM/"
+base_folder  <- Sys.getenv("REEIM_ABC_OUT", "./REEIM/out_REEIM/")  # folder holding the ABC result (REEIM_res.rds)
 REEIM_res <- readRDS(file.path(base_folder, "REEIM_res.rds"))
 particles   <- REEIM_res$particles
 last_gen <- length(particles)
@@ -62,7 +62,9 @@ H_kde     <- ks::kde(x = keep$H, w = keep$weights * nrow(keep))
 H_targets <- signif(c(H_kde$eval.points[which.max(H_kde$estimate)],
                       weighted_quantile(keep$H, keep$weights, c(0.5, 0.95))), 3)
 dir.create("./REEIM/scenarios/", recursive = TRUE, showWarnings = FALSE)
-fwrite(data.table(label = c("mode", "median", "q95"), H = H_targets), "./REEIM/scenarios/H_targets.csv")
+out_root <- Sys.getenv("REEIM_PPS_OUT", "./REEIM/scenarios/")  # scenario output; existing scenario folders are skipped
+dir.create(out_root, recursive = TRUE, showWarnings = FALSE)
+fwrite(data.table(label = c("mode", "median", "q95"), H = H_targets), file.path(out_root, "H_targets.csv"))
 
 # for no change in fishing intensity after APOT
 sim_parameters <- data.table(
@@ -183,14 +185,13 @@ generate_cmd <- function(theta_row, controls,rep,out_folder,
 
 slim_script  <- "./REEIM/REEIM.slim"
 input_dir    <- "./REEIM/input/perch"   # system description: parameters, fishing trajectory, selectivity
-out_root    <-  "./REEIM/scenarios/"
 
 dir.create(out_root, recursive = TRUE, showWarnings = FALSE)
 
 gen_t0 <- 10000               # start of the decade
 gen_t1 <- 10125               # end of the decade (adjust to your definition)
 
-cores <- 10
+cores <- as.integer(Sys.getenv("REEIM_CORES", "10"))  # set REEIM_CORES to use more cores (e.g. under SLURM)
 
 directories <- sapply(1:nrow(scenario_grid),function(x){
   sc <- scenario_grid[x,]
@@ -241,10 +242,11 @@ for(si in which(!directories %in% list.files(out_root))){
   }))
   
   
-  write.table(as.vector((cmds)),"cmds.txt",row.names = FALSE,col.names = FALSE,sep = " ",quote = FALSE)
+  cmd_file <- file.path(out_dir, "cmds.txt")
+  write.table(as.vector((cmds)),cmd_file,row.names = FALSE,col.names = FALSE,sep = " ",quote = FALSE)
   
   ## run the simulation in SLiM using system call
-  system(paste("cat cmds.txt | parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
+  system(paste("cat", shQuote(cmd_file), "| parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
 }
 
 
@@ -335,8 +337,9 @@ for(si in which(!directories %in% list.files(out_root))){
   }))
   
   
-  write.table(as.vector((cmds)),"cmds.txt",row.names = FALSE,col.names = FALSE,sep = " ",quote = FALSE)
+  cmd_file <- file.path(out_dir, "cmds.txt")
+  write.table(as.vector((cmds)),cmd_file,row.names = FALSE,col.names = FALSE,sep = " ",quote = FALSE)
   
   ## run the simulation in SLiM using system call
-  system(paste("cat cmds.txt | parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
+  system(paste("cat", shQuote(cmd_file), "| parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
 }

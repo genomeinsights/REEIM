@@ -1,0 +1,39 @@
+# Published PMRN midpoints (Lp50, cm) and related maturity sizes for North Sea plaice. ALL values QUOTED from text/tables (none digitised from figures).
+# value_type: Lp50 = length at 50% probability of maturing (PMRN midpoint); L50_ogive = length at 50% mature (ogive); Lp50_diff = difference in Lp50 between periods
+# Sources:
+#  G2003 = Grift et al. 2003 MEPS 257:247-257 (FEMALES only, Dutch market sampling, cohorts 1955-1995, ages 2-6), p.253 text. https://folk.uib.no/nfiof/NMA/Reading%20list/GriftEtal2003.pdf
+#  G2007 = Grift et al. 2007 MEPS 334:213-224 (FEMALES only; 2-D LP50 averaged over all cohorts 1955-1994), Table 2 p.218. https://vliz.be/imisdocs/publications/ocrd/261965.pdf
+#  vW2010 = van Walraven et al. 2010 J Sea Res 64:85-92, p.88 text and Table 2 (differences). Periods: I=1900s (Wallace 1914), II=1980s, III=2000s (males 2007-2008 surveys). https://lodewijkvanwalraven.nl/wp-content/uploads/2016/05/van-Walraven-et-al-2010-Fisheries-induced-evolution-in-growth-maturation-and-reproductive-investment-of-the-sexually-dimorphic-North-Sea-plaice.pdf
+#  R1989 = Rijnsdorp 1989 J Cons int Explor Mer 46:35-51 (abstract), ogive L50, 1980s survey+market data. https://academic.oup.com/icesjms/article/46/1/35/772522
+sex,age,period_or_cohorts,value_type,value_cm,source,location,note
+F,4,cohorts 1955-1964,Lp50,34.4,G2003,p.253 text,mean length at age 4 = 29.7 cm
+F,4,cohorts 1985-1994,Lp50,30.1,G2003,p.253 text,mean length at age 4 = 32.7 cm
+F,3,cohorts 1955-1995 trend,Lp50_diff,-4,G2003,p.253 text,"ca. 4 cm decrease (ages 3,4,5); p<0.005"
+F,4,cohorts 1955-1995 trend,Lp50_diff,-4,G2003,p.253 text,ca. 4 cm decrease
+F,5,cohorts 1955-1995 trend,Lp50_diff,-4,G2003,p.253 text,ca. 4 cm decrease
+F,2,cohorts 1955-1995 trend,Lp50_diff,-5,G2003,p.253 text,ca. 5 cm decrease (ages 2 and 6)
+F,6,cohorts 1955-1995 trend,Lp50_diff,-5,G2003,p.253 text,ca. 5 cm decrease
+F,2,mean cohorts 1955-1994,Lp50,38.6,G2007,Table 2,all-cohort average
+F,3,mean cohorts 1955-1994,Lp50,34.6,G2007,Table 2,all-cohort average
+F,4,mean cohorts 1955-1994,Lp50,32.3,G2007,Table 2,all-cohort average
+F,5,mean cohorts 1955-1994,Lp50,30.7,G2007,Table 2,all-cohort average
+F,6,mean cohorts 1955-1994,Lp50,29.7,G2007,Table 2,all-cohort average
+F,4,1900s (period I),Lp50,41.6,vW2010,p.88 text,
+F,4,1980s (period II),Lp50,33.3,vW2010,p.88 text,
+F,4,2000s (period III),Lp50,22.9,vW2010,p.88 text,
+M,2,1980s (period II),Lp50,19.5,vW2010,p.88 text,no male Lp50 for 1900s
+M,2,2000s (period III),Lp50,16.0,vW2010,p.88 text,
+F,3,I->II,Lp50_diff,-12.4,vW2010,Table 2,sign assumed (decline); p<0.01
+F,4,I->II,Lp50_diff,-8.3,vW2010,Table 2,= 41.6-33.3
+F,5,I->II,Lp50_diff,-7.9,vW2010,Table 2,
+F,6,I->II,Lp50_diff,-8.4,vW2010,Table 2,p<0.05
+F,2,II->III,Lp50_diff,-24.7,vW2010,Table 2,n.s. per text (only ages 3-4 significant)
+F,3,II->III,Lp50_diff,-15.1,vW2010,Table 2,significant
+F,4,II->III,Lp50_diff,-10.4,vW2010,Table 2,= 33.3-22.9
+F,5,II->III,Lp50_diff,-8.3,vW2010,Table 2,n.s.
+F,6,II->III,Lp50_diff,-7.7,vW2010,Table 2,n.s.
+M,1,II->III,Lp50_diff,-0.9,vW2010,Table 2,n.s.
+M,2,II->III,Lp50_diff,-3.5,vW2010,Table 2,= 19.5-16.0; p=0.048
+M,3,II->III,Lp50_diff,-15.2,vW2010,Table 2,n.s.; authors call it artefact (few males maturing at age 3)
+M,all,1980s,L50_ogive,22,R1989,abstract,males mature as II-III group
+F,all,1980s,L50_ogive,34,R1989,abstract,females mature as IV-V group

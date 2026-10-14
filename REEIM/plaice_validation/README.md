@@ -1,0 +1,72 @@
+# North Sea plaice hold-out validation
+
+A second study system for REEIM, used as a validation. The model gets only contemporary data
+(2015–2020) plus the relative exploitation history. Its output is then checked against two
+quantities it never sees:
+
+- **(a)** the assessed harvest rate H, catch / total biomass in 2020 = 0.078 (ICES 2025 assessment), and
+- **(b)** the published decline in female maturation size (PMRN Lp50), e.g. age 4: 34.4 → 30.1 cm
+  (cohorts 1955–64 → 1985–94, Grift et al. 2003) and 41.6 → 22.9 cm (1900s → 2000s, van Walraven et al. 2010).
+
+Background, choices and scientific caveats are in the project note `plaice_holdout_feasibility.md`.
+Issue numbers (I-xx) refer to the project's `issue_register.md`.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `../input/plaice/` | Model inputs in the standard format (see `../input/README.md`), plus `growth_priors.csv` for the growth fit. **Main set:** g fixed at 0.25. |
+| `../input/plaice_gfree/` | Sensitivity set: the same inputs, but with growth constants from the free-g fit (g ≈ 0.81) (I-18). |
+| `data_prep/get_observed_data_plaice.R` | DATRAS BTS Q3 and NS-IBTS Q1, 2015–2020 → `data/observed_data_plaice_{female,pooled}.RData`, maturity ogive, summary CSVs. |
+| `data_prep/build_fishing_intensity.py` | Relative fishing intensity 1850–2020 → `../input/plaice/fishing_intensity.csv`. |
+| `data_prep/sources/` | ICES 2024 assessment summary, Rijnsdorp & Millner (1996) Table 1, and the derived pre-1957 F on the ICES scale. |
+| `growth_fit/deterministic_ABC.R` | Copy of `deterministic_ABC/deterministic_ABC.R` that reads L_T, max age and priors from a system input folder (I-19). With no input folder it behaves exactly like the perch script. |
+| `growth_fit/output/` | Plaice growth-fit results (2,500 particles × 5 generations). |
+| `validation_targets/` | Published Lp50 values and the ICES 2025 assessment series with catch / TSB. |
+| `data/` | Generated observed data, and the cached raw DATRAS downloads (`raw_*.rds`). |
+
+## Running it (from the repository root)
+
+```sh
+# 1. Observed data. Uses the cached raw_*.rds files in data/ if present; otherwise needs
+#    internet access and install.packages("icesDatras").
+Rscript REEIM/plaice_validation/data_prep/get_observed_data_plaice.R
+
+# 2. Fishing trajectory (optional; already in ../input/plaice). Arguments: war-year fraction, terminal year.
+python3 REEIM/plaice_validation/data_prep/build_fishing_intensity.py \
+  REEIM/plaice_validation/data_prep/sources REEIM/input/plaice/fishing_intensity.csv 0.1 2020
+
+# 3. Deterministic growth fit (optional; results already in growth_fit/output)
+Rscript REEIM/plaice_validation/growth_fit/deterministic_ABC.R \
+  REEIM/plaice_validation/data/observed_data_plaice_female.RData 4 \
+  REEIM/input/plaice REEIM/plaice_validation/growth_fit/output
+
+# 4. REEIM ABC-SMC (copy REEIM/input/ along with the model when running on another machine)
+Rscript REEIM/run_REEIM_ABC.R . <cores> ./REEIM/input/plaice
+Rscript REEIM/run_REEIM_ABC.R . <cores> ./REEIM/input/plaice_gfree     # sensitivity
+```
+
+## Data (DATRAS, 2015–2020)
+
+- **Size structure and size at age:** BTS quarter 3 beam-trawl survey. North Sea only: hauls at 51° N or below (the Channel) and west of Great Britain (the Irish Sea and Bristol Channel, a different stock) are dropped (I-20). That leaves 1,702 valid hauls and 148,505 plaice measured. Catches are standardised per metre of beam per hour, because the vessels use 4, 7 and 8 m beams. The otoliths are length-stratified, so size at age comes from an age–length key applied to catch at length.
+- **Females:** the length frequencies are mostly unsexed, so the female size distribution is catch at length × the female share at that length in the otolith samples. Female size at age is 107, 163, 211, 247, 274 and 301 mm at ages 0–5, levelling off near 350–360 mm.
+- **Maturity:** NS-IBTS quarter 1 (plaice spawn in Q1), North Sea and Skagerrak with the Kattegat excluded. Female L50 = 219 mm (L25–L75 170–269, n = 5,792); male L50 = 156 mm. `LT_obs` = 219.
+- **Size-distribution window:** 12–50 cm (`kde_from` = 12), because the beam trawl under-catches smaller age-0 plaice (I-07).
+
+## Growth constants (I-18, I-19)
+
+The deterministic growth ABC was run on the female size at age, with L_T = 219 mm.
+
+| Model | h (mm/yr) | h0 | g_i | g | final ε |
+|---|---|---|---|---|---|
+| (5) L_T fixed, g free | 99.4 (58.6–143.4) | 1.16 | 0.73 | 0.81 (0.36–1.32) | 0.503 |
+| (6) L_T fixed, g = 0.25 | 50.0 (42.7–57.1) | 2.36 | 0.11 | 0.25 | 0.484 |
+
+g is only weakly identified from size at age: fixing it at a biologically plausible 0.25 fits as
+well as letting it go free (least-squares SRMSE 0.437 vs 0.426). The free fit pushes the growth
+slow-down at the record 2010s stock size into g. The two curves differ mainly beyond age 8, where
+the data are sparse. The main set therefore uses g = 0.25, and the free-g set is kept as a
+sensitivity run. `hmaxPrior` = h × 1.616 (1 + γ·D_K^δ), as for perch (38.3 → 62).
+
+Priors that depend on trait scale (S_hmax, S_LT, f) are the perch ranges rescaled by the ratio of
+the plaice to the perch reference values. They should be checked on test runs.

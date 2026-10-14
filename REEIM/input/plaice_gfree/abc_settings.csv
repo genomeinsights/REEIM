@@ -1,0 +1,7 @@
+name,value,description
+# DRAFT for the North Sea plaice hold-out validation.
+LT_obs,219,observed size at maturation (mm): female L50 from NS-IBTS Q1 2015-2020 (North Sea and Skagerrak; IBTS_Q1_maturity_ogive.csv)
+observed_data,./REEIM/plaice_validation/data/observed_data_plaice_female.RData,R data file with age_structure_obs and size_structure_obs (made by REEIM/plaice_validation/data_prep/get_observed_data_plaice.R from DATRAS BTS Q3 2015-2020)
+kde_bw,2,bandwidth (cm) of the size-distribution kernel density
+kde_from,12,lower end (cm) of the size-distribution comparison; the beam trawl under-catches smaller (age-0) plaice (issue I-07)
+kde_to,50,upper end (cm) of the size-distribution comparison

@@ -1,0 +1,49 @@
+name,value,description
+# Species- and system-specific constants for REEIM.slim (North Sea plaice, hold-out validation). DRAFT.
+# SENSITIVITY SET: identical to ../plaice except the growth constants and the priors scaled from them.
+# Any value given on the command line with -d overrides the value here.
+# Write integers without a decimal point (e.g. 10000) and reals with one (e.g. 62.0).
+# Growth constants: posterior means of the deterministic growth ABC (REEIM/plaice_validation/growth_fit/) on female DATRAS BTS Q3 2015-2020 size-at-age;
+# tri-phasic growth with L_T = 219 mm fixed and g free (deterministic ABC model 5; g absorbs density effects, issue I-18).
+# Sexes are pooled in the model; reference values and observed data are for females, the sex with PMRN series.
+#
+# Inferred parameters: defaults for standalone runs only (ABC-SMC sets them with -d)
+f,0.118,fecundity scaling
+w,0.3,cost of fecundity
+Shmax,233,directional viability cost on h_max
+SLT,233,directional viability cost on L_T
+H,0.08,terminal harvest intensity (fraction of biomass); assessed catch/TSB 2020 = 0.078
+# Fixed biological limits
+LTLim,324,L_T above which there is no viability cost (mm); perch ratio LTLim/LTPrior = 1.48 kept
+hmaxLim,0,h_max below which there is no viability cost (mm/yr)
+K,10000,carrying capacity
+maxAge,40,maximum age (years); plaice reach 50 (FishBase) and M = 0.1
+# Reference trait values (scale mutational effects and initial state; not priors)
+LTPrior,219.0,reference size at maturation L_T (mm) = LT_obs (female L50 NS-IBTS Q1 2015-2020)
+gPrior,0.81,reference reproductive investment g; tri-phasic growth with L_T = 219 mm fixed and g free (deterministic ABC model 5; g absorbs density effects; issue I-18)
+hmaxPrior,160.6,reference maximum growth rate h_max (mm/yr) = fitted h (99.4) times 1 + gamma*DK^delta (1.616) as for perch (38.3 -> 62)
+# Growth and density dependence
+gi,0.727,immature growth cost (same fit as gPrior)
+h0,1.16,first-year growth multiplier (same fit as gPrior)
+gamma,0.18,density-dependence scale (perch/pike value)
+delta,0.57,density-dependence exponent (perch/pike value)
+DK,8.67,density at K (perch/pike value)
+# Genetics
+sd,0.05,mutational SD (relative to reference trait values)
+u,1e-6,mutation rate after cycle 2000
+Ve,0.05,environmental variance (relative)
+# Length-weight relationship W = a * L^b (W in g, L in mm). Females, North Sea 1998-2009 (FishBase: a = 0.00590, b = 3.154 with L in cm)
+a,4.139e-6,length-weight coefficient
+b,3.154,length-weight exponent
+# Burn-in and initial population
+Tdelta,10000,burn-in length (cycles) before fishing starts
+initAgeMax,20,initial ages drawn uniformly from 0 to this value
+burninMedianSizeMin,60,abort if median size (mm) falls below this at a burn-in check (survey median ~160 mm; tune on test runs)
+burninMedianSizeMax,300,abort if median size (mm) exceeds this at a burn-in check (tune on test runs)
+burninAgeQ99Min,5,abort if the 99th age percentile falls below this at a burn-in check
+burninAgeQ99Max,40,abort if the 99th age percentile exceeds this at a burn-in check
+# Size selectivity (classes are read from selectivity.csv): 80 mm beam-trawl codend retention
+# (L50 14.4 cm, selection range 2.4 cm; Molenaar & Chen 2018) times discard mortality 0.85 below the 27 cm minimum size
+selBinWidth,10,width of the size classes in selectivity.csv (mm)
+selBelow,0,vulnerability of fish smaller than the first class
+selAbove,1,vulnerability of fish larger than the last class

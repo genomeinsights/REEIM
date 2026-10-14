@@ -1,0 +1,13 @@
+# Prior bounds for the deterministic growth ABC (REEIM/plaice_validation/growth_fit/deterministic_ABC.R).
+# Wider than perch: a least-squares fit gives h ~ 98 mm/yr and g ~ g_i ~ 0.75 for female plaice.
+# g_fixed adds model (6), the g ~ 0.25 sensitivity fit (issue I-18; plaice female reproductive investment ~0.18-0.25).
+parameter,lower,upper
+linf,300,550
+k,0.05,0.6
+t0,-4,0
+h,30,200
+h0,0.5,3
+g_i,0,1.5
+g,0,1.5
+L_T,0,400
+g_fixed,0.25,0.25

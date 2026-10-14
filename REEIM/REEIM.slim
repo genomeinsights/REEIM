@@ -289,7 +289,8 @@ reproduction(NULL, "F") {
 	// -------------------------
 	// Density-dependent growth
 	// -------------------------
-	D = (K / size(inds[ages != 0])) * DK;
+	// D rises with census size relative to K, so fewer fish (e.g. after fishing) means faster growth
+	D = (size(inds[ages != 0]) / K) * DK;
 	h = hmax / (1 + gamma * D^delta);
 	h[h < 0] = 0;
 	
@@ -299,8 +300,10 @@ reproduction(NULL, "F") {
 	// -------------------------
 	
 	
-	immature = inds.tagF < LT;
-	mature   = inds.tagF >= LT;
+	// maturation is permanent: once mature (tagL0), an individual stays mature even if
+	// this year's expressed LT is above its size
+	mature   = inds.tagL0 | (inds.tagF >= LT);
+	immature = !mature;
 	
 	inds[immature].tagF = inds[immature].tagF +(h[immature]-(gi/(gi+3))*(inds[immature].tagF+h[immature]));
 	

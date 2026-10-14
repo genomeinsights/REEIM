@@ -52,6 +52,18 @@ keep <- base[keep == TRUE]
 # optional sanity: normalize weights
 keep[, weights := weights / sum(weights)]
 
+# H scenarios: posterior mode, weighted median and upper bound of the central 90% interval,
+# computed from the final generation (previously hard-coded; the old 0.127 was a KDE-grid midpoint)
+weighted_quantile <- function(x, w, prob) {
+  ord <- order(x); cw <- cumsum(w[ord]) / sum(w)
+  approx(cw, x[ord], prob)$y
+}
+H_kde     <- ks::kde(x = keep$H, w = keep$weights * nrow(keep))
+H_targets <- signif(c(H_kde$eval.points[which.max(H_kde$estimate)],
+                      weighted_quantile(keep$H, keep$weights, c(0.5, 0.95))), 3)
+dir.create("./REEIM/scenarios/", recursive = TRUE, showWarnings = FALSE)
+fwrite(data.table(label = c("mode", "median", "q95"), H = H_targets), "./REEIM/scenarios/H_targets.csv")
+
 # for no change in fishing intensity after APOT
 sim_parameters <- data.table(
   ## used for inference
@@ -83,8 +95,6 @@ sim_parameters <- data.table(
 
 ## mode, median and 95
 #tab <- posterior_summary(post, params,prob = c(0.05,0.95)) From Table_REEIM_params.R
-# mode, median and upper 90% quantile
-H_targets <- c(0.0677, 0.127, 0.194)
 Ve_grid   <- c(0.025, 0.05, 0.075)       
 sd_grid   <- c(0.025, 0.05, 0.075)       
 K_grid    <- c(10000, 20000,30000)       
@@ -222,7 +232,7 @@ for(si in which(!directories %in% list.files(out_root))){
       generate_cmd(
         theta_row   = th,
         controls    = list(HTarget = sc$HTarget, Ve = sc$Ve, sd = sc$sd, K = sc$K,projection=1000,Hx=sc$Hx),
-        rep         = rep,
+        rep         = (i - 1) * R + rep,  # unique per draw, so repeated draws don't share output files
         out_folder  = out_dir,
         slim_script = slim_script
       )  
@@ -316,7 +326,7 @@ for(si in which(!directories %in% list.files(out_root))){
       generate_cmd(
         theta_row   = th,
         controls    = list(HTarget = sc$HTarget, Ve = sc$Ve, sd = sc$sd, K = sc$K),
-        rep         = rep,
+        rep         = (i - 1) * R + rep,  # unique per draw, so repeated draws don't share output files
         out_folder  = out_dir,
         slim_script = slim_script
       )  

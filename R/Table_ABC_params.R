@@ -44,7 +44,7 @@ posterior_summary <- function(data, params, prob = c(0.05, 0.95)) {
     data.table(
       Parameter = p,
       Mean      = mu,
-      Median    = median(d$eval.points),
+      Median    = weighted_ci(values, weights, 0.5),
       Mode      = md,
       CI_lower  = ci[1],
       CI_upper  = ci[2]
@@ -82,7 +82,7 @@ kbl <- kable(
   format      = "latex",
   booktabs    = TRUE,
   escape      = FALSE,
-  col.names   = c("Parameter", "Mean [95\\% CI]", "Mode"),
+  col.names   = c("Parameter", "Mean [90\\% CI]", "Mode"),
   caption     = caption_text,
   label       = "tab:S2_ABC_parameters"
 ) |>

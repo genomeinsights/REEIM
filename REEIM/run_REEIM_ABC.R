@@ -114,8 +114,10 @@ summarise_simulations <- function(files,
                                   age_structure_obs,
                                   size_structure_obs) {
   
-  ## Observed size density
-  obs_dens <- density(size_structure_obs$L, bw = BW, from = from, to = to)
+  ## Observed size density, normalised over the comparison window only, so that
+  ## size classes the survey gear under-samples don't shift the curve (same for simulated sizes below)
+  obs_L <- size_structure_obs$L[size_structure_obs$L >= from & size_structure_obs$L <= to]
+  obs_dens <- density(obs_L, bw = BW, from = from, to = to)
   obs_dens <- data.table(L = obs_dens$x, obs = obs_dens$y)
   
   rbindlist(
@@ -139,6 +141,7 @@ summarise_simulations <- function(files,
       size_counts[is.na(size_counts)] <- 0
       
       sizes <- rep(seq_along(size_counts)-1, size_counts) ## smallest size class is 0 since size is truncated
+      sizes <- sizes[sizes >= from & sizes <= to]
       sim_dens <- density(sizes, bw = BW, from = from, to = to)$y
       
       SRMSE_dens <- sqrt(mean((obs_dens$obs - sim_dens)^2)) / sd(obs_dens$obs)
@@ -198,6 +201,15 @@ prior_density <- function(theta, prior_lim) {
 #-----------------------------------------------------------
 proposal_density <- function(theta, centers, weights, cov_mat) {
   sum(weights * mvtnorm::dmvnorm(centers, mean = theta, sigma = cov_mat))
+}
+
+#-----------------------------------------------------------
+# Draw one candidate from the same mixture proposal_density() evaluates:
+# pick a previous particle by weight, add MVN(0, cov_mat) noise
+#-----------------------------------------------------------
+draw_proposal <- function(centers, weights, cov_mat) {
+  j <- sample.int(nrow(centers), 1, prob = weights)
+  setNames(centers[j, ] + as.vector(mvtnorm::rmvnorm(1, sigma = cov_mat)), colnames(centers))
 }
 
 ## =======================
@@ -288,16 +300,19 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
         build_slim_cmd(theta, sim_parameters, slim_script,out_folder)
       })
     } else {
+      prev_centers <- as.matrix(REEIM_res$particles[[GEN-1]][keep == TRUE, ..par_names])
+      prev_weights <- REEIM_res$particles[[GEN-1]][keep == TRUE, weights]
+      prev_cov     <- REEIM_res$KDE[[GEN-1]]$H*c   # same kernel as the importance weights below
       cmds <- replicate(100, {
-        theta_cand <- rkde(1, REEIM_res$KDE[[GEN-1]])
+        theta_cand <- draw_proposal(prev_centers, prev_weights, prev_cov)
         
         ## redraw if out of bounds     
         while(out_of_bounds(theta_cand,prior_lim)){
-          theta_cand <- rkde(1, REEIM_res$KDE[[GEN-1]])
+          theta_cand <- draw_proposal(prev_centers, prev_weights, prev_cov)
         }
         
         theta <- sapply(theta_cand, function(x) format(x,digits=3))
-        names(theta) <- REEIM_res$KDE[[GEN-1]]$names
+        names(theta) <- par_names
         build_slim_cmd(theta, sim_parameters, slim_script,out_folder)
       })
       

@@ -2,8 +2,9 @@
 #SBATCH -J reeim-pps
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -c 64
-#SBATCH -t 2-00:00:00
+#SBATCH -p main
+#SBATCH -c 128
+#SBATCH -t 24:00:00
 #SBATCH -o slurm-%x-%j.out
 #
 # Posterior predictive simulations (perch), after the perch ABC has finished. From the repository root:

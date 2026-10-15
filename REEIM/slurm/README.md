@@ -1,4 +1,4 @@
-# Running the REEIM reruns on a SLURM cluster (UPPMAX)
+# Running the REEIM reruns on a SLURM cluster (Dardel, PDC)
 
 These notes are for running the REEIM ABC-SMC reruns on a cluster that uses the SLURM scheduler.
 Everything runs from one clone of the repository.
@@ -8,13 +8,18 @@ Each job uses the cores of one node, and GNU parallel spreads the SLiM runs over
 
 | Step | Job script | Needs | Approx. size |
 |---|---|---|---|
-| 1. Perch ABC-SMC | `abc.sbatch perch` | nothing | 5 generations × 2,500 SLiM runs ≈ 500 core-hours |
-| 2. Perch posterior predictive simulations | `pps.sbatch` | step 1 finished | 24 scenarios × 240 runs ≈ 300–400 core-hours |
+| 1. Perch ABC-SMC | `abc.sbatch perch` | nothing | 5 generations × 2,500 SLiM runs ≈ 1,100–1,700 core-hours |
+| 2. Perch posterior predictive simulations | `pps.sbatch` | step 1 finished | 24 scenarios × 240 runs ≈ 500–800 core-hours |
 | 3. Plaice ABC-SMC | `abc.sbatch plaice` | go-ahead from Petri (inputs still being tested) | similar to step 1 |
 | 4. Recovery test | (added later) | step 1; the scripts are rebuilt after it | about 30,000 runs |
 
-The sizes assume about 140 s per SLiM run, which is what an Apple-silicon Mac mini takes.
-Cluster cores may be slower, so check with `test_one.sh` first.
+The sizes assume about 5.5 min of core time per SLiM run, measured on a Mac mini running 13 at once, and up to 1.5× that on cluster cores.
+Check with `test_one.sh` first.
+
+**Dardel specifics.** A thin node has 128 physical cores (256 logical CPUs) and 256 GB of memory.
+The `main` partition gives whole nodes, is charged for all 128 cores, and allows at most 24 hours per job.
+The job scripts therefore default to `-p main -c 128 -t 24:00:00`, and one ABC generation (2,500 runs) takes about 2–3 hours on one node.
+For smaller jobs, `-p shared` charges per core and allows up to 7 days.
 Steps 1 and 3 can run at the same time, because each system writes to its own folder.
 
 ## 1. Get the code
@@ -48,17 +53,18 @@ The results are still written, but the log fills with errors.
 bash REEIM/slurm/test_one.sh        # on a compute node, e.g. inside an interactive job
 ```
 
-The run takes a few minutes. Expect the `real` time to be roughly 2–3 minutes.
+The run takes a few minutes. Expect the `real` time to be roughly 3–6 minutes.
 The last line printed should start with 10126, the final year.
 Send Petri the time, because it sets the time limit to request.
 
 ## 4. Submit
 
 ```
-sbatch -A <project> -p <partition> -c 64 -t 2-00:00:00 REEIM/slurm/abc.sbatch perch
+sbatch -A <project> REEIM/slurm/abc.sbatch perch
 ```
 
-- `-c` is the number of cores. Use a whole node if you can.
+- The defaults are one whole `main` node (128 cores) for 24 hours. Override them on the command line if needed, e.g. `-p shared -c 32` for a small test.
+- To queue a continuation automatically, submit a second job that starts when the first ends: `sbatch -A <project> --dependency=afterany:<jobid> REEIM/slurm/abc.sbatch perch`.
 - The job writes `REEIM/out_perch/GEN_1 … GEN_5` and, after each generation, `REEIM/out_perch/REEIM_res.rds`.
 - **If the job hits its time limit, submit exactly the same command again.** It continues from the last finished generation. It first deletes the runs that were cut off, then fills up the generation in progress.
 - Do not copy an old `REEIM/out_REEIM/` folder in. The rerun must start from scratch in `out_perch`.
@@ -66,7 +72,7 @@ sbatch -A <project> -p <partition> -c 64 -t 2-00:00:00 REEIM/slurm/abc.sbatch pe
 When step 1 is done:
 
 ```
-sbatch -A <project> -p <partition> -c 64 REEIM/slurm/pps.sbatch
+sbatch -A <project> REEIM/slurm/pps.sbatch
 ```
 
 This step reads `REEIM/out_perch/REEIM_res.rds` and writes `REEIM/scenarios_perch/`.

@@ -11,6 +11,7 @@ Each job uses the cores of one node, and GNU parallel spreads the SLiM runs over
 | 1. Perch ABC-SMC | `abc.sbatch perch` | nothing | 5 generations × 2,500 SLiM runs ≈ 1,100–1,700 core-hours |
 | 2. Perch posterior predictive simulations | `pps.sbatch` | step 1 finished | 24 scenarios × 240 runs ≈ 500–800 core-hours |
 | 3. Plaice ABC-SMC (two jobs) | `abc.sbatch plaice` (H prior 0.06–0.11, ICES catch/TSB) and `abc.sbatch plaice_Hfree` (H prior 0–0.2) | go-ahead from Petri (inputs still being tested) | similar to step 1, each |
+| 3b. Plaice posterior predictive check | `ppc.sbatch plaice` and `ppc.sbatch plaice_Hfree` | the matching step-3 job finished | 250 runs each (~30 min on one node) |
 | 4. Recovery test | (added later) | step 1; the scripts are rebuilt after it | about 30,000 runs |
 
 The sizes assume about 5.5 min of core time per SLiM run, measured on a Mac mini running 13 at once, and up to 1.5× that on cluster cores.
@@ -101,6 +102,7 @@ The `GEN_*` folders hold the raw SLiM output. Keep them on the cluster until Pet
 | `environment.yml` | conda environment (SLiM 5.0, R packages, GNU parallel) |
 | `env.sh` | activates it inside jobs; the only file you may need to edit |
 | `abc.sbatch` | ABC-SMC for one system (`perch`, `plaice`); resumes after a time limit |
+| `ppc.sbatch` | Posterior predictive check of L_T change for a plaice ABC (genetic L_T and survey-estimated PMRN/ogive); resumes |
 | `pps.sbatch` | perch posterior predictive simulations |
 | `clean_partial.sh` | removes runs cut off by a time limit (called by `abc.sbatch`) |
 | `test_one.sh` | single test run |

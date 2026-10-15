@@ -16,7 +16,8 @@ Issue numbers (I-xx) refer to the project's `issue_register.md`.
 | Path | Contents |
 |---|---|
 | `../input/plaice/` | Model inputs in the standard format (see `../input/README.md`), plus `growth_priors.csv` for the growth fit. **Main set:** g fixed at 0.25. |
-| `../input/plaice_gfree/` | Sensitivity set: the same inputs, but with growth constants from the free-g fit (g ≈ 0.81) (I-18). |
+| `../input/plaice_Hfree/` | Identical to `../input/plaice/` except the H prior: 0–0.2 instead of 0.06–0.11 (ICES catch/TSB). Run alongside the main set to show what the data say about H without the assessment. |
+| `../input/plaice_gfree/` | Growth constants from the free-g fit (g ≈ 0.81) (I-18). Kept for reference only and not run: g is set at a realistic 0.25 because size at age does not identify it. |
 | `data_prep/get_observed_data_plaice.R` | DATRAS BTS Q3 and NS-IBTS Q1, 2015–2020 → `data/observed_data_plaice_{female,pooled}.RData`, maturity ogive, summary CSVs. |
 | `data_prep/build_fishing_intensity.py` | Relative fishing intensity 1850–2020 → `../input/plaice/fishing_intensity.csv`. |
 | `data_prep/sources/` | ICES 2024 assessment summary, Rijnsdorp & Millner (1996) Table 1, and the derived pre-1957 F on the ICES scale. |
@@ -43,7 +44,7 @@ Rscript REEIM/plaice_validation/growth_fit/deterministic_ABC.R \
 
 # 4. REEIM ABC-SMC (copy REEIM/input/ along with the model when running on another machine)
 Rscript REEIM/run_REEIM_ABC.R . <cores> ./REEIM/input/plaice
-Rscript REEIM/run_REEIM_ABC.R . <cores> ./REEIM/input/plaice_gfree     # sensitivity
+Rscript REEIM/run_REEIM_ABC.R . <cores> ./REEIM/input/plaice_Hfree     # same, H prior 0-0.2
 ```
 
 ## Data (DATRAS, 2015–2020)
@@ -65,8 +66,8 @@ The deterministic growth ABC was run on the female size at age, with L_T = 219 m
 g is only weakly identified from size at age: fixing it at a biologically plausible 0.25 fits as
 well as letting it go free (least-squares SRMSE 0.437 vs 0.426). The free fit pushes the growth
 slow-down at the record 2010s stock size into g. The two curves differ mainly beyond age 8, where
-the data are sparse. The main set therefore uses g = 0.25, and the free-g set is kept as a
-sensitivity run. `hmaxPrior` = h × 1.616 (1 + γ·D_K^δ), as for perch (38.3 → 62).
+the data are sparse. The main set therefore uses g = 0.25, and the free-g set is kept for
+reference only (not run). `hmaxPrior` = h × 1.616 (1 + γ·D_K^δ), as for perch (38.3 → 62).
 
 Priors that depend on trait scale (S_hmax, S_LT, f) are the perch ranges rescaled by the ratio of
 the plaice to the perch reference values. They should be checked on test runs.

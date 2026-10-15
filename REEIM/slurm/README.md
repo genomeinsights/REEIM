@@ -10,7 +10,7 @@ Each job uses the cores of one node, and GNU parallel spreads the SLiM runs over
 |---|---|---|---|
 | 1. Perch ABC-SMC | `abc.sbatch perch` | nothing | 5 generations × 2,500 SLiM runs ≈ 1,100–1,700 core-hours |
 | 2. Perch posterior predictive simulations | `pps.sbatch` | step 1 finished | 24 scenarios × 240 runs ≈ 500–800 core-hours |
-| 3. Plaice ABC-SMC | `abc.sbatch plaice` | go-ahead from Petri (inputs still being tested) | similar to step 1 |
+| 3. Plaice ABC-SMC (two jobs) | `abc.sbatch plaice` (H prior 0.06–0.11, ICES catch/TSB) and `abc.sbatch plaice_Hfree` (H prior 0–0.2) | go-ahead from Petri (inputs still being tested) | similar to step 1, each |
 | 4. Recovery test | (added later) | step 1; the scripts are rebuilt after it | about 30,000 runs |
 
 The sizes assume about 5.5 min of core time per SLiM run, measured on a Mac mini running 13 at once, and up to 1.5× that on cluster cores.
@@ -20,7 +20,7 @@ Check with `test_one.sh` first.
 The `main` partition gives whole nodes, is charged for all 128 cores, and allows at most 24 hours per job.
 The job scripts therefore default to `-p main -c 128 -t 24:00:00`, and one ABC generation (2,500 runs) takes about 2–3 hours on one node.
 For smaller jobs, `-p shared` charges per core and allows up to 7 days.
-Steps 1 and 3 can run at the same time, because each system writes to its own folder.
+Steps 1 and 3 (and the two plaice jobs) can run at the same time, because each system writes to its own folder.
 
 ## 1. Get the code
 

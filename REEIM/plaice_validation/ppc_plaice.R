@@ -10,8 +10,10 @@
 ##       REEIM_vesurvey.slim (REEIM.slim plus a random female survey every 5 years). Run cmds.txt with
 ##       GNU parallel, e.g.  cat <ppc_out>/cmds.txt | parallel -j <cores>
 ##   Rscript REEIM/plaice_validation/ppc_plaice.R survey <ppc_out>
-##       Fits ogive L50 (per survey year) and PMRN Lp50 at age 4 (per decade; first-time maturing ~ age + length)
-##       to each simulated survey, as an analyst would, and summarises genetic L_T, ogive and PMRN changes.
+##       Fits ogive L50 (per survey year) and PMRN Lp50 at age 4 (per decade) to each simulated survey, and summarises
+##       genetic L_T, ogive and PMRN changes. The PMRN is estimated two ways: with first-time maturing known (logistic
+##       first ~ age + length; not observable in real surveys) and with the Barot et al. (2004) demographic method
+##       from age-specific ogives and growth, as in the published plaice PMRNs (Grift et al. 2003; van Walraven et al. 2010).
 ## Published (female, age 4): Grift et al. 2003 Lp50 cohorts 1955-64 -> 1985-94: 34.4 -> 30.1 cm (-12.5%);
 ## van Walraven et al. 2010 Lp50 1900s -> 1980s -> 2000s: 41.6 -> 33.3 -> 22.9 cm (-20%, then -31%).
 suppressPackageStartupMessages({library(data.table); library(ggplot2)})
@@ -60,6 +62,18 @@ if (mode == "survey") {
   out <- args[2]; d <- fread(file.path(out, "design.csv")); dir.create(file.path(out, "fig"), showWarnings = FALSE)
   l50 <- function(x) { m <- glm(mature ~ length, binomial, x); b <- coef(m); -b[1] / b[2] }
   lp50 <- function(x, a = 4) { if (sum(x$first) < 10) return(NA_real_); b <- coef(glm(first ~ age + length, binomial, x)); -(b[1] + b[2] * a) / b[3] }
+  ## Barot et al. (2004) demographic method, as used for the published plaice PMRNs: from the maturity ogives at
+  ## ages a-1 and a and the mean growth increment ds between them (first-time maturing is not observed),
+  ## p(a, s) = [o(a, s) - o(a-1, s - ds)] / [1 - o(a-1, s - ds)]; Lp50 = length where p(a, s) = 0.5.
+  ## Ogives: one logistic over ages a-1 and a with an age effect and a common length slope (separate per-age
+  ## slopes often give p(a, s) curves that never reach 0.5).
+  barot <- function(x, a = 4) {
+    x <- x[age %in% c(a - 1, a)]; if (nrow(x) < 40 || length(unique(x$mature)) < 2) return(NA_real_)
+    m <- suppressWarnings(glm(mature ~ factor(age) + length, binomial, x)); ds <- x[age == a, mean(length)] - x[age == a - 1, mean(length)]
+    p <- function(L) { o1 <- predict(m, data.frame(age = a - 1, length = L - ds), type = "response")
+      o2 <- predict(m, data.frame(age = a, length = L), type = "response"); (o2 - o1) / (1 - o1) }
+    r <- try(uniroot(function(L) p(L) - 0.5, c(50, 1000))$root, silent = TRUE); if (inherits(r, "try-error")) NA_real_ else r
+  }
   res <- list(); traj <- list()
   for (i in seq_len(nrow(d))) {
     sf <- Sys.glob(sprintf("%s/out/survey_*_rep%d.txt", out, d$rep[i])); tf <- Sys.glob(sprintf("%s/out/traitStats_*_rep%d.txt", out, d$rep[i]))
@@ -68,15 +82,18 @@ if (mode == "survey") {
     s <- fread(sf); s[, decade := 10 * (year %/% 10)]
     og <- s[, .(value = l50(.SD)), by = year]
     pm <- s[mature == 0 | first == 1, .(value = lp50(.SD)), by = decade][, .(year = decade + 5, value)]
+    pb <- s[, .(value = barot(.SD)), by = decade][, .(year = decade + 5, value)]
     ## PMRN windows use decade midpoints: 1905-1985, 1965-1995 (~1960-90), 1985-2005, 1905-2015
-    pm_ch <- with(list(v = function(a, b) 100 * (pm[year == b, value] / pm[year == a, value] - 1)),
-                  c(`1905-85` = v(1905, 1985), `1960-90` = v(1965, 1995), `1985-2005` = v(1985, 2005), `1900-2020` = v(1905, 2015)))
+    dch <- function(pm) { v <- function(a, b) { x <- 100 * (pm[year == b, value] / pm[year == a, value] - 1); if (length(x)) x else NA_real_ }
+      c(`1905-85` = v(1905, 1985), `1960-90` = v(1965, 1995), `1985-2005` = v(1985, 2005), `1900-2020` = v(1905, 2015)) }
     res[[length(res) + 1]] <- rbind(data.table(rep = d$rep[i], measure = "genetic mean L_T", as.data.table(as.list(change(tr)))),
                                     data.table(rep = d$rep[i], measure = "ogive L50 (survey)", as.data.table(as.list(change(og)))),
-                                    data.table(rep = d$rep[i], measure = "PMRN Lp50 age 4 (survey)", as.data.table(as.list(pm_ch))), use.names = FALSE)
+                                    data.table(rep = d$rep[i], measure = "PMRN Lp50 age 4 (survey, first-time maturing known)", as.data.table(as.list(dch(pm)))),
+                                    data.table(rep = d$rep[i], measure = "PMRN Lp50 age 4 (survey, Barot 2004 method)", as.data.table(as.list(dch(pb)))), use.names = FALSE)
     ref <- function(x) x[, rel := 100 * (value / mean(value[year >= 1895 & year <= 1915], na.rm = TRUE) - 1)]
     traj[[length(traj) + 1]] <- rbind(ref(tr[year >= 1895 & year %% 5 == 0])[, measure := "genetic mean L_T"],
-                                      ref(og)[, measure := "ogive L50 (survey)"], ref(pm)[, measure := "PMRN Lp50 age 4 (survey)"])[, rep := d$rep[i]]
+                                      ref(og)[, measure := "ogive L50 (survey)"], ref(pm)[, measure := "PMRN Lp50 age 4 (survey, first-time maturing known)"],
+                                      ref(pb)[, measure := "PMRN Lp50 age 4 (survey, Barot 2004 method)"])[, rep := d$rep[i]]
   }
   res <- rbindlist(res); setnames(res, names(res), sub("\\.", "-", names(res))); traj <- rbindlist(traj)
   s <- rbindlist(lapply(unique(res$measure), function(m) summ(res[measure == m], lab = m)))

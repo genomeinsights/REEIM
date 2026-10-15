@@ -25,6 +25,7 @@ for (i in seq_len(nrow(design))) {
   sim <- fread(f, fill = Inf)
   cs <- as.numeric(sim[V1 == "countSize" & V2 == APOT, 3:ncol(sim)]); cs[is.na(cs)] <- 0
   sizes <- rep(seq_along(cs) - 1, cs); sizes <- sizes[sizes >= from & sizes <= to]
+  if (length(sizes) < 2) { res[[i]] <- data.table(design[i], status = "no fish 12-50 cm"); next }
   sd_ <- density(sizes, bw = BW, from = from, to = to)$y
   srmse_d <- sqrt(mean((obs_dens$dens - sd_)^2)) / sd(obs_dens$dens)
   ms <- as.numeric(sim[V1 == "meanSize" & V2 == APOT, 3:ncol(sim)])

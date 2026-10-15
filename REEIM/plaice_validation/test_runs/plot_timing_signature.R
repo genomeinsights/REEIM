@@ -15,6 +15,8 @@ for (dir in dirs) {
     if (!length(tf) || !length(df)) next
     tr <- fread(tf); if (max(tr$G) < APOT) next
     tr <- tr[G >= Tdelta, .(year = start_year + G - Tdelta, LT)]
+    if ("gen" %in% names(d) && d$gen[i] == "extreme") next   # h2 ~ 0.95, implausible
+    if (min(tr$LT) < 50) next                                  # degenerate: L_T collapses (no fish >= 12 cm)
     dm <- fread(df, fill = Inf)[V1 == "meanSize" & V2 >= Tdelta]
     s4 <- data.table(year = start_year + dm$V2 - Tdelta, S4 = as.numeric(dm$V7))   # columns V3.. are ages 0.., so V7 = age 4
     x <- merge(tr, s4, by = "year")
@@ -45,7 +47,7 @@ p <- ggplot(r, aes(FI, rate)) + geom_hline(yintercept = 0, linetype = 3) +
   facet_wrap(~comp, nrow = 1) +
   labs(x = "Decade-mean relative fishing intensity FI", y = "Change over the decade (%)", colour = "Simulations", shape = "Published Lp50 (per decade)",
        title = "Timing signature: per-decade change vs fishing intensity (1850-2020)",
-       subtitle = "Each grey/coloured point = one run x one decade; line = loess. Red symbols: published female age-4 Lp50 declines as compounded decadal rates") +
+       subtitle = "Each point = one run x one decade (runs with h2 ~ 0.95 or L_T < 50 mm excluded); line = loess.\nRed symbols: published female age-4 Lp50 declines as compounded decadal rates") +
   theme_bw(base_size = 10) + theme(legend.position = "bottom", legend.box = "vertical") +
   guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2)))
 ggsave(out, p, width = 10, height = 5.5, dpi = 150); cat("Wrote", out, "\n")

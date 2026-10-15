@@ -35,7 +35,7 @@ for (i in seq_len(nrow(design))) {
 res <- rbindlist(res); fwrite(res, "fig/vesurvey_series.csv")
 pub <- data.table(year = c(1905, 1985, 2005, 1960, 1990), rel = c(0, -20.0, -45.0, 0, -12.5),
                   src = c(rep("van Walraven 2010 (PMRN age 4)", 3), rep("Grift 2003 (PMRN age 4), 0 at 1955-64", 2)))
-lo <- min(c(res$rel, res$rel_lo, pub$rel), na.rm = TRUE); hi <- max(c(res$rel, res$rel_hi, 5), na.rm = TRUE); sc <- hi - lo
+lo <- max(-100, min(c(res$rel, res$rel_lo, pub$rel), na.rm = TRUE)); hi <- min(30, max(c(res$rel, res$rel_hi, 5), na.rm = TRUE)); sc <- hi - lo   # clipped: PMRN extrapolation to age 4 can explode when fish mature at ages 1-2
 FI[, y := lo + FI * sc]
 p <- ggplot() + geom_ribbon(data = FI, aes(year, ymin = lo, ymax = y), fill = "grey88") +
   geom_hline(yintercept = 0, linetype = 3) +

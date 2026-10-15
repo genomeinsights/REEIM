@@ -18,8 +18,8 @@ runs <- rbindlist(lapply(dirs, function(dir) {
     w30 <- sapply(1900:1990, function(y) 100 * (a(y + 30) / a(y) - 1))
     cbind(base, status = "ok", as.data.table(as.list(ch)), steep30 = min(w30), steep30_from = (1900:1990)[which.min(w30)],
           h2_1850 = tr[G == Td, Va_LT / Vp_LT], h2_2020 = tr[G == Td + 170, Va_LT / Vp_LT],
-          distance = s[rep == d$rep[i] & set == d$set[i], distance])
-  }))
+          distance = s[rep == d$rep[i] & set == d$set[i], distance][1])
+  }), fill = TRUE)
 }), fill = TRUE)
 runs[, flag := trimws(paste(ifelse(SLT > 324 | w < 0.1, "outside-prior", ""), ifelse(!is.na(h2_2020) & h2_2020 > 0.6, "h2>0.6", "")))]
 ok <- runs[status == "ok"]

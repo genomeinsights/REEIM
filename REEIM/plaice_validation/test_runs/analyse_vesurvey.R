@@ -1,4 +1,4 @@
-## Virtual-ecologist analysis of survey_*.txt files written by the REEIM_vesurvey.slim copy (random females every 5 years).
+## Virtual-ecologist analysis of survey_*.txt files written by the REEIM_vesurvey.slim copy (random females every surveyStep years; default yearly).
 ## Per run: maturity-ogive L50 by survey year (logistic mature ~ length, ages >= 1), PMRN Lp50 at age 4 by decade
 ## (logistic first-time maturing ~ age + length on fish immature at the start of the year, pooling the decade's surveys),
 ## and the genetic mean L_T from traitStats. Figure: all three as % change vs ~1900, with fishing intensity and published Lp50.
@@ -47,7 +47,7 @@ p <- ggplot() + geom_ribbon(data = FI, aes(year, ymin = lo, ymax = y), fill = "g
   scale_y_continuous(name = "Change since 1895-1915 (%)", sec.axis = sec_axis(~ (. - lo) / sc, name = "Relative fishing intensity (grey)")) +
   coord_cartesian(xlim = c(1895, 2022), ylim = c(lo, hi), expand = FALSE) +
   labs(x = "Year", linetype = NULL, shape = NULL, title = "Virtual ecologist: what a survey would estimate vs the genetic L_T",
-       subtitle = "Random 2000 females every 5 years; ogive L50 per survey year, PMRN Lp50 (age 4) per decade (first-time maturing ~ age + length;\nshaded = 90% bootstrap interval)") +
+       subtitle = "Random 2000 females per survey year; ogive L50 per survey year, PMRN Lp50 (age 4) per decade (first-time maturing ~ age + length;\nshaded = 90% bootstrap interval)") +
   theme_bw(base_size = 10) + theme(legend.position = "bottom", legend.box = "vertical")
 ggsave("fig/vesurvey_LT_PMRN_ogive.png", p, width = 11, height = 7.5, dpi = 150)
 ## windows (% change) per run and measure; PMRN uses decade midpoints (1905, 1965, 1985, 1995, 2005)

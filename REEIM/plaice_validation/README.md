@@ -25,6 +25,8 @@ Issue numbers (I-xx) refer to the project's `issue_register.md`.
 | `growth_fit/output/` | Plaice growth-fit results (2,500 particles × 5 generations). |
 | `validation_targets/` | Published Lp50 values and the ICES 2025 assessment series with catch / TSB. |
 | `data/` | Generated observed data, and the cached raw DATRAS downloads (`raw_*.rds`). |
+| `ppc_plaice.R` | Posterior predictive check of evolutionary change after a plaice ABC (run by `../slurm/ppc.sbatch`; see below). |
+| `test_runs/` | Pre-ABC test runs and their scripts (outputs not in git): prior draws (`make_test_runs.py`), S_LT × w grid (`make_grid.py`, `grid_LT_change.R`), maximum-response stress test (`make_stress.py`, `analyse_stress.R`), virtual-ecologist survey model (`REEIM_vesurvey.slim`, `make_vesurvey.py`, `analyse_vesurvey.R`), plots against fishing intensity (`plot_LT_vs_fishing.R`, `plot_timing_signature.R`), and the ABC-pilot diagnostics (`abc_pilot/size_diag.R`, `size_fix.R`, `compat.R`). |
 
 ## Running it (from the repository root)
 
@@ -71,3 +73,37 @@ reference only (not run). `hmaxPrior` = h × 1.616 (1 + γ·D_K^δ), as for perc
 
 Priors that depend on trait scale (S_hmax, S_LT, f) are the perch ranges rescaled by the ratio of
 the plaice to the perch reference values. They should be checked on test runs.
+
+## Size-distribution window (kde_from = 16 cm)
+
+BTS Q3 is an offshore beam-trawl survey and under-catches plaice below about 16 cm (age 0–1 still in
+coastal nurseries, I-07). With the comparison starting at 12 cm, 58% of the squared size-distribution
+error of the best pilot particles came from 12–16 cm, while size at age 1–5 and the age composition
+fitted well. Starting at 16 cm brings the size-distribution SRMSE of those particles from 0.39 to 0.12,
+the level of perch (`test_runs/abc_pilot/size_diag.R`, `size_fix.R`).
+
+## Evolutionary change: posterior predictive check
+
+The published declines are PMRN Lp50 estimates from survey and market samples, not the genetic L_T, so
+the check is made on both:
+
+1. **Genetic L_T** (`ppc_plaice.R genetic`): weighted change over the accepted particles of the last ABC
+   generation, from their `traitStats` files; no new runs.
+2. **Survey statistics** (`ppc_plaice.R prepare` / `survey`): 250 posterior draws are rerun with
+   `test_runs/REEIM_vesurvey.slim`, a copy of `REEIM.slim` that also writes a random sample of 2,000
+   females (age ≥ 1) every year 1900–2020 (age, length, mature, first-time maturing; about 4 MB per run).
+   To each simulated survey are fitted the maturity ogive L50 (per year) and the PMRN Lp50 at age 4
+   (per decade), the latter both with first-time maturing known and with the Barot et al. (2004)
+   demographic method from age-specific ogives and growth, as in Grift et al. (2003) and van Walraven
+   et al. (2010).
+
+For each statistic, `ppc_*_summary.csv` gives the median, 90% interval and the posterior predictive
+probability of a decline at least as large as published, for 1905–85 (−20%), 1960–90 (−12.5%),
+1985–2005 (−31%) and 1900–2020; `fig/ppc_trajectories.png` shows the bands with fishing intensity.
+Keep `REEIM_vesurvey.slim` in step with `REEIM.slim`: it differs only in the three blocks marked
+"VE survey".
+
+Supporting evidence from the test runs (`test_runs/abc_pilot/compat.R`): among 598 runs scored with the
+16 cm window, the best fit reachable falls sharply with the size of the simulated 1960–90 decline
+(total distance 0.59 with no decline, 1.26 at ≥ 4%, 3.23 at ≥ 12.5%), and all three distance
+components get worse together.

@@ -7,7 +7,7 @@
 ##       (uses their traitStats files; no new simulations).
 ##   Rscript REEIM/plaice_validation/ppc_plaice.R prepare <abc_out> <ppc_out> <input_dir> [n=250] [seed=1]
 ##       Draws n parameter sets from the weighted posterior and writes <ppc_out>/design.csv and cmds.txt for
-##       REEIM_vesurvey.slim (REEIM.slim plus a random female survey every 5 years). Run cmds.txt with
+##       REEIM_vesurvey.slim (REEIM.slim plus a random survey of 2000 females every year, 1900-2020). Run cmds.txt with
 ##       GNU parallel, e.g.  cat <ppc_out>/cmds.txt | parallel -j <cores>
 ##   Rscript REEIM/plaice_validation/ppc_plaice.R survey <ppc_out>
 ##       Fits ogive L50 (per survey year) and PMRN Lp50 at age 4 (per decade) to each simulated survey, and summarises

@@ -1,5 +1,5 @@
 """Write design.csv + a command file for virtual-ecologist runs with REEIM_vesurvey.slim (a copy of REEIM.slim that also
-writes survey_*.txt: 2000 random females every 5 years 1900-2020 with age, length, maturity and first-time maturing).
+writes survey_*.txt: 2000 random females every year (surveyStep, default 1) 1900-2020 with age, length, maturity and first-time maturing).
 Usage: python3 make_vesurvey.py <out dir> <base dir holding REEIM/input and REEIM_vesurvey.slim> <cmds file name> <first rep> 'H,SLT,w,gen,label' ...
 gen: default | more (Ve 0.02, sd 0.1) | extreme (Ve 0.01, sd 0.1, u 1e-5), as in make_stress.py. Appends to design.csv.
 Analyse with analyse_vesurvey.R."""

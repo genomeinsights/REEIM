@@ -14,6 +14,8 @@
 #   ppc_genetic_summary.csv  (genetic L_T change over the accepted particles; no new runs)
 #   ppc_survey_summary.csv   (genetic L_T, survey ogive L50 and survey PMRN Lp50 age 4 over n_draws new runs
 #                             of REEIM_vesurvey.slim) and fig/ppc_trajectories.png.
+#   ppc_sensitivity_summary.csv (fishing effect on L_T per 0.1 of H, from n_draws paired H = 0 control runs,
+#                             so 2 x n_draws runs in all: ~1 h on one node for 250 draws).
 # Resubmitting skips the draws whose runs have finished.
 set -eo pipefail
 SYSTEM=${1:-plaice}; N=${2:-250}

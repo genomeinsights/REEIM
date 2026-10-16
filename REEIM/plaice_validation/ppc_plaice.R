@@ -4,16 +4,21 @@
 ## Usage (from the repository root):
 ##   Rscript REEIM/plaice_validation/ppc_plaice.R genetic <abc_out> <ppc_out>
 ##       Weighted change in genetic mean L_T over the accepted particles of the last ABC generation
-##       (uses their traitStats files; no new simulations).
+##       (uses their traitStats files; no new simulations). Also a naive evolutionary sensitivity, change / (10 H)
+##       in % per 0.1 of H, which assumes no change without fishing (see the paired H = 0 controls below).
 ##   Rscript REEIM/plaice_validation/ppc_plaice.R prepare <abc_out> <ppc_out> <input_dir> [n=250] [seed=1]
 ##       Draws n parameter sets from the weighted posterior and writes <ppc_out>/design.csv and cmds.txt for
 ##       REEIM_vesurvey.slim (REEIM.slim plus a random survey of 2000 females every year, 1900-2020). Run cmds.txt with
 ##       GNU parallel, e.g.  cat <ppc_out>/cmds.txt | parallel -j <cores>
+##       Each draw i also gets a paired control run (rep n + i) with H = 0 and the same seed: the burn-in is
+##       identical, so the difference between the pair is the effect of fishing on L_T (drift diverges after 1850).
 ##   Rscript REEIM/plaice_validation/ppc_plaice.R survey <ppc_out>
 ##       Fits ogive L50 (per survey year) and PMRN Lp50 at age 4 (per decade) to each simulated survey, and summarises
 ##       genetic L_T, ogive and PMRN changes. The PMRN is estimated two ways: with first-time maturing known (logistic
 ##       first ~ age + length; not observable in real surveys) and with the Barot et al. (2004) demographic method
 ##       from age-specific ogives and growth, as in the published plaice PMRNs (Grift et al. 2003; van Walraven et al. 2010).
+##       Evolutionary sensitivity: per draw, (change in genetic L_T at the drawn H - change in its H = 0 control) / (10 H),
+##       i.e. the fishing-induced change in L_T in % per 0.1 of terminal harvest rate, per window.
 ## Published (female, age 4): Grift et al. 2003 Lp50 cohorts 1955-64 -> 1985-94: 34.4 -> 30.1 cm (-12.5%);
 ## van Walraven et al. 2010 Lp50 1900s -> 1980s -> 2000s: 41.6 -> 33.3 -> 22.9 cm (-20%, then -31%).
 suppressPackageStartupMessages({library(data.table); library(ggplot2)})
@@ -35,10 +40,13 @@ if (mode == "genetic") {
   ch <- rbindlist(lapply(seq_len(nrow(p)), function(i) {
     f <- file.path(abc_out, paste0("GEN_", G), paste0("traitStats_", p$file[i])); if (!file.exists(f)) return(NULL)
     tr <- fread(f)[, .(year = G - Td + start_year, value = LT)]
-    data.table(i = i, weight = p$weights[i], as.data.table(as.list(change(tr))))
+    data.table(i = i, weight = p$weights[i], H = p$H[i], as.data.table(as.list(change(tr))))
   }))
   setnames(ch, names(ch), sub("\\.", "-", names(ch)))
-  s <- summ(ch, ch$weight, "genetic mean L_T (accepted particles)")[, `:=`(generation = G, epsilon = r$epsilons[G])]
+  sens <- copy(ch)[, (names(win)) := lapply(.SD, function(x) x / (10 * H)), .SDcols = names(win)]
+  s <- rbind(summ(ch, ch$weight, "genetic mean L_T (accepted particles)"),
+             summ(sens, sens$weight, "naive sensitivity: % change in L_T per 0.1 H (accepted particles)")[, `:=`(published = NA, P_reach_published = NA)])[
+    , `:=`(generation = G, epsilon = r$epsilons[G])]
   fwrite(ch, file.path(out, "ppc_genetic_particles.csv")); fwrite(s, file.path(out, "ppc_genetic_summary.csv"))
   print(s, digits = 3)
 }
@@ -50,16 +58,19 @@ if (mode == "prepare") {
   r <- readRDS(file.path(abc_out, "REEIM_res.rds")); G <- length(r$particles); p <- r$particles[[G]][keep == TRUE]
   pars <- fread(file.path(input_dir, "priors.csv"))$parameter
   idx <- sample(nrow(p), n, replace = TRUE, prob = p$weights)   # draws from the weighted posterior (no kernel jitter)
-  d <- data.table(set = "ppc", rep = seq_len(n), p[idx, ..pars], particle = idx)
+  d <- data.table(set = "ppc", rep = seq_len(n), p[idx, ..pars], particle = idx, control_for = NA_integer_)
+  d0 <- copy(d)[, `:=`(set = "ppc_H0", control_for = rep, rep = rep + n, H = 0)]   # paired no-fishing controls
+  d <- rbind(d, d0)
   dir.create(file.path(out, "out"), showWarnings = FALSE, recursive = TRUE)
   fwrite(d, file.path(out, "design.csv"))
-  cmds <- sapply(seq_len(n), function(i) paste0("slim -s ", 7000 + i, " -d \"folder='", file.path(out, "out"), "'\" -d \"inputDir='", input_dir,
-    "'\" -d rep=", i, " ", paste0("-d ", pars, "=", as.character(signif(unlist(d[i, ..pars]), 4)), collapse = " "), " ", slim_script, " > /dev/null 2>&1"))
-  writeLines(cmds, file.path(out, "cmds.txt")); cat("Wrote", n, "commands to", file.path(out, "cmds.txt"), "\n")
+  cmds <- sapply(seq_len(2 * n), function(i) paste0("slim -s ", 7000 + ((i - 1) %% n) + 1, " -d \"folder='", file.path(out, "out"), "'\" -d \"inputDir='", input_dir,
+    "'\" -d rep=", d$rep[i], " ", paste0("-d ", pars, "=", as.character(signif(unlist(d[i, ..pars]), 4)), collapse = " "), " ", slim_script, " > /dev/null 2>&1"))
+  writeLines(cmds, file.path(out, "cmds.txt")); cat("Wrote", 2 * n, "commands (", n, "draws +", n, "H = 0 controls) to", file.path(out, "cmds.txt"), "\n")
 }
 
 if (mode == "survey") {
-  out <- args[2]; d <- fread(file.path(out, "design.csv")); dir.create(file.path(out, "fig"), showWarnings = FALSE)
+  out <- args[2]; dall <- fread(file.path(out, "design.csv")); dir.create(file.path(out, "fig"), showWarnings = FALSE)
+  d <- if ("control_for" %in% names(dall)) dall[is.na(control_for)] else dall
   l50 <- function(x) { m <- glm(mature ~ length, binomial, x); b <- coef(m); -b[1] / b[2] }
   lp50 <- function(x, a = 4) { if (sum(x$first) < 10) return(NA_real_); b <- coef(glm(first ~ age + length, binomial, x)); -(b[1] + b[2] * a) / b[3] }
   ## Barot et al. (2004) demographic method, as used for the published plaice PMRNs: from the maturity ogives at
@@ -112,4 +123,28 @@ if (mode == "survey") {
     theme(legend.position = "bottom", legend.box = "vertical") + labs(x = "Year", colour = NULL, fill = NULL, linetype = NULL, shape = NULL,
       title = sprintf("Posterior predictive: genetic L_T and survey-estimated maturation size (%d draws; median, 90%% band)", nrow(d)))
   ggsave(file.path(out, "fig/ppc_trajectories.png"), p, width = 9, height = 5.5, dpi = 150)
+
+  ## Evolutionary sensitivity from the paired H = 0 controls
+  if ("control_for" %in% names(dall) && any(!is.na(dall$control_for))) {
+    gch <- function(r) { tf <- Sys.glob(sprintf("%s/out/traitStats_*_rep%d.txt", out, r)); if (!length(tf)) return(NULL)
+      tr <- fread(tf)[, .(year = G - Td + start_year, value = LT)]; if (max(tr$year) < 2020) return(NULL); change(tr) }
+    sv <- rbindlist(lapply(dall[!is.na(control_for), which = TRUE], function(j) {
+      c0 <- gch(dall$rep[j]); m <- dall[rep == dall$control_for[j]]; c1 <- gch(m$rep)
+      if (is.null(c0) || is.null(c1)) return(NULL)
+      rbind(data.table(rep = m$rep, H = m$H, measure = "change at drawn H", as.data.table(as.list(c1))),
+            data.table(rep = m$rep, H = m$H, measure = "change without fishing (H = 0 control)", as.data.table(as.list(c0))),
+            data.table(rep = m$rep, H = m$H, measure = "fishing effect (drawn H - control)", as.data.table(as.list(c1 - c0))),
+            data.table(rep = m$rep, H = m$H, measure = "sensitivity: % change in L_T per 0.1 H", as.data.table(as.list((c1 - c0) / (10 * m$H)))))
+    }))
+    setnames(sv, names(sv), sub("\\.", "-", names(sv)))
+    ss <- rbindlist(lapply(unique(sv$measure), function(m) summ(sv[measure == m], lab = paste("genetic L_T:", m))))
+    ss[!grepl("at drawn H", measure), `:=`(published = NA, P_reach_published = NA)]
+    fwrite(merge(sv, d[, c("rep", setdiff(names(d), c("set", "rep", "particle", "control_for"))), with = FALSE], by = c("rep", "H")),
+           file.path(out, "ppc_sensitivity_draws.csv"))
+    fwrite(ss, file.path(out, "ppc_sensitivity_summary.csv")); print(ss, digits = 3)
+    x <- merge(sv[measure == "sensitivity: % change in L_T per 0.1 H"], d, by = c("rep", "H"))
+    pars <- intersect(c("w", "Shmax", "SLT", "f", "H"), names(x))
+    cat("\nSpearman correlation of the 1900-2020 sensitivity with the parameters:\n")
+    print(round(sapply(pars, function(v) cor(x[["1900-2020"]], x[[v]], method = "s", use = "complete")), 2))
+  }
 }

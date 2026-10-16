@@ -97,6 +97,14 @@ the check is made on both:
    demographic method from age-specific ogives and growth, as in Grift et al. (2003) and van Walraven
    et al. (2010).
 
+3. **Evolutionary sensitivity** (`ppc_sensitivity_summary.csv`): each posterior draw is also run with
+   H = 0 and the same seed (identical burn-in). The difference in the genetic L_T change between the pair
+   is the effect of fishing; divided by 10 H it gives the fishing-induced change in L_T in % per 0.1 of
+   terminal harvest rate. This separates how hard the stock was fished (H, from the assessment) from how
+   strongly this population responds (S_LT, f, w, Shmax, constrained by the present-day data), which trade
+   off against H when H is not known. `ppc_plaice.R genetic` also reports a naive version (change / 10 H,
+   assuming no change without fishing) from the accepted particles alone.
+
 For each statistic, `ppc_*_summary.csv` gives the median, 90% interval and the posterior predictive
 probability of a decline at least as large as published, for 1905–85 (−20%), 1960–90 (−12.5%),
 1985–2005 (−31%) and 1900–2020; `fig/ppc_trajectories.png` shows the bands with fishing intensity.

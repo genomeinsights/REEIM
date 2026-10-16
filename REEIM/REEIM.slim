@@ -136,7 +136,12 @@ initialize() {
 	if (size(FishingIntensity) < 2)
 		stop("fishing_intensity.csv must have at least two rows: " + fishingFile);
 	
-	defineConstant("APOT",   Tdelta+size(FishingIntensity));   // assumed present-day observation time
+	// APOT is the first cycle after the fishing trajectory, i.e. one year after the present-day
+	// observation year (the last row of fishing_intensity.csv, cycle Tdelta+size-1 = 10125 for perch).
+	// The R scripts compare simulations with the data at APOT-1; runs end at APOT + projection, so a
+	// projection of P years ends P+1 years after the present (cycle 11126 for perch with P = 1000).
+	// Kept as is because the analysis scripts select finished runs by these final cycles.
+	defineConstant("APOT",   Tdelta+size(FishingIntensity));
 	
 	if (!exists("projection")) defineConstant("projection", 0); // years after APOT, default 0 for ABC-SMC but needs to be >0 for predictive simulations
 	
@@ -346,27 +351,36 @@ reproduction(NULL, "F") {
 		weights = a * inds.tagF^b;
 		weights = weights / sum(weights);
 		
-		// scaling factor to ensure H is expressed as % of biomass
-		// removal at year t = H * FishingIntensity[t] / FishingIntensity[last] of biomass,
-		// so exactly H at terminal intensity (was H * FI[t] * FI[last])
-		Hk = sum(weights * fishing_mort) *
-			FishingIntensity[size(FishingIntensity)-1] / H;
+		// Expected fraction of biomass removed this year: H at the terminal (present-day)
+		// intensity, H * FishingIntensity[t] / FishingIntensity[last] before it, and Hx times
+		// the terminal rate after APOT (projections).
+		if (sim.cycle > Tdelta+size(FishingIntensity)-1)
+			removal = H * Hx;
+		else
+			removal = H * FishingIntensity[sim.cycle - Tdelta] / FishingIntensity[size(FishingIntensity)-1];
 		
-		fishing_fitness =
-			1 - fishing_mort / Hk *
-			FishingIntensity[min(sim.cycle - Tdelta,size(FishingIntensity)-1)];
-		
-		if (sim.cycle > Tdelta+length(FishingIntensity)-1) {
-			fishing_fitness =
-				1 - fishing_mort / Hk *
-				FishingIntensity[size(FishingIntensity)-1]*Hx; // fishing intensity after APOT
-		
-		}else{
-			fishing_fitness =
-				1 - fishing_mort / Hk *
-				FishingIntensity[sim.cycle - Tdelta];
+		// Individual mortality is proportional to vulnerability, scaled so that the expected
+		// biomass removed is exactly `removal`. When that would push the most vulnerable fish
+		// above a mortality of 1, they are capped at 1 and the scale is raised (bisection) until
+		// the capped mortalities again remove `removal`; if even removing every vulnerable fish
+		// is not enough, all vulnerable fish die. (Before this fix the capping was done after
+		// scaling, so realised removal fell below H at high fishing pressure.)
+		mort = fishing_mort * removal / sum(weights * fishing_mort);
+		if (max(mort) > 1) {
+			vul = fishing_mort > 0;
+			if (removal >= sum(weights[vul])) {
+				mort = asFloat(vul);
+			} else {
+				lo = removal / sum(weights * fishing_mort);
+				hi = 1 / min(fishing_mort[vul]);
+				for (i in 1:60) {
+					mid = (lo + hi) / 2;
+					if (sum(weights * pmin(1.0, mid * fishing_mort)) < removal) lo = mid; else hi = mid;
+				}
+				mort = pmin(1.0, hi * fishing_mort);
+			}
 		}
-		fishing_fitness[fishing_fitness < 0] = 0;
+		fishing_fitness = 1 - mort;
 	}
 	
 	

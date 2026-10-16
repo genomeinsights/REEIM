@@ -149,7 +149,7 @@ R      <- 2           # stochastic replicates per draw (seeds)
 set.seed(42)
 
 generate_cmd <- function(theta_row, controls,rep,out_folder,
-                         slim_script) {
+                         slim_script, seed = sample.int(.Machine$integer.max, 1)) {
   # theta_row is a one-row data.table with columns matching your model params,
   # e.g., w, S_hmax, S_LT, f, H, g_i, h_0, K, etc.
   
@@ -180,7 +180,7 @@ generate_cmd <- function(theta_row, controls,rep,out_folder,
   # -d key=value string
   kv <- paste(paste0("-d ", names(sim_parameters), "=", sim_parameters), collapse = " ")
   
-  cmd <- paste("slim ", paste0('-d folder=\\"', normalizePath(out_folder), '\\"'),
+  cmd <- paste("slim -s", seed, paste0('-d folder=\\"', normalizePath(out_folder), '\\"'),
                paste0('-d inputDir=\\"', normalizePath(input_dir), '\\"'), kv, slim_script)
   return(cmd)
 }
@@ -200,8 +200,19 @@ directories <- sapply(1:nrow(scenario_grid),function(x){
   paste0("H",sc$HTarget, "_Ve",sc$Ve, "_sd",sc$sd, "_K",sc$K,"_Hx",sc$Hx)
 })
 
+## Last cycle of a projection run: REEIM.slim runs to Tdelta + rows of fishing_intensity.csv + projection
+## (11126 for perch). A scenario is complete only when every run reached it; complete scenarios get a
+## .done marker and are skipped on a rerun, any other scenario folder is run again (its files are overwritten).
+pps_last <- as.numeric(subset(read.csv(file.path(input_dir, "parameters.csv"), comment.char = "#"), name == "Tdelta")$value) +
+  nrow(fread(file.path(input_dir, "fishing_intensity.csv"))) + 1000
+scenario_done <- function(out_dir, n_runs) {
+  tf <- list.files(out_dir, pattern = "^traitStats_", full.names = TRUE)
+  fin <- vapply(tf, function(f) { l <- tail(readLines(f, warn = FALSE), 1); length(l) > 0 && startsWith(l, paste0(pps_last, " ")) }, logical(1))
+  sum(fin) >= n_runs
+}
+
 # si <- 10
-for(si in which(!directories %in% list.files(out_root))){
+for(si in which(!file.exists(file.path(out_root, directories, ".done")))){
   sc <- scenario_grid[si,]
   cat(as.vector(unlist(sc)),"\n")
   
@@ -237,7 +248,8 @@ for(si in which(!directories %in% list.files(out_root))){
         controls    = list(HTarget = sc$HTarget, Ve = sc$Ve, sd = sc$sd, K = sc$K,projection=1000,Hx=sc$Hx),
         rep         = (i - 1) * R + rep,  # unique per draw, so repeated draws don't share output files
         out_folder  = out_dir,
-        slim_script = slim_script
+        slim_script = slim_script,
+        seed        = base_seed * 1e7 + si * 1e4 + (i - 1) * R + rep  # recorded in cmds.txt
       )  
     })
     
@@ -248,7 +260,9 @@ for(si in which(!directories %in% list.files(out_root))){
   write.table(as.vector((cmds)),cmd_file,row.names = FALSE,col.names = FALSE,sep = " ",quote = FALSE)
   
   ## run the simulation in SLiM using system call
-  system(paste("cat", shQuote(cmd_file), "| parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
+  system(paste("cat", shQuote(cmd_file), "| parallel --joblog", shQuote(file.path(out_dir, "joblog.txt")), "-j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
+  if (scenario_done(out_dir, Ntheta * R)) file.create(file.path(out_dir, ".done")) else
+    message("Scenario ", directories[si], " has unfinished runs; it will be rerun next time")
 }
 
 

@@ -56,8 +56,12 @@ base_folder <- if (length(args) > 3) args[4] else "./REEIM/out_REEIM/"
 #-----------------------------------------------------------
 
 
+## Only the file name is parsed, and a key must follow an underscore and be followed by
+## a number, so letters in folder names (e.g. the "f" and "H" of out_plaice_Hfree) or in
+## other keys (H and Hx) can't be mistaken for a parameter.
 get_param <- function(key, bname) {
-  as.numeric(strsplit(strsplit(bname, key)[[1]][2], "_", fixed = TRUE)[[1]][1])
+  m <- regmatches(basename(bname), regexec(paste0("_", key, "(-?[0-9.]+(e-?[0-9]+)?)(_|\\.txt$)"), basename(bname)))[[1]]
+  if (length(m) == 0) NA_real_ else as.numeric(m[2])
 }
 
 
@@ -70,8 +74,35 @@ read_settings <- function(file) {
   setNames(as.list(dt$value), dt$name)
 }
 
-## build SLiM command
-build_slim_cmd <- function(theta, sim_parameters, script,out_folder) {
+#-----------------------------------------------------------
+# A run counts as finished only when both of its output files reach the
+# comparison cycle: traitStats has a row for APOT and demographicData has its
+# size counts for APOT (written later in the same cycle). Anything else is a
+# run that failed, was killed or cut off by a time limit, and is deleted so the
+# generation is topped up with new draws instead of ending short.
+#-----------------------------------------------------------
+run_finished <- function(trait_file, APOT) {
+  demo_file <- sub("traitStats_", "demographicData_", trait_file)
+  if (!file.exists(demo_file)) return(FALSE)
+  tr <- tryCatch(readLines(trait_file, warn = FALSE), error = function(e) character())
+  if (!any(startsWith(tr, paste0(APOT, " ")))) return(FALSE)
+  dm <- tryCatch(readLines(demo_file, warn = FALSE), error = function(e) character())
+  any(startsWith(dm, paste0("countSize ", APOT, " ")))
+}
+
+remove_unfinished <- function(out_folder, APOT) {
+  tf <- list.files(out_folder, pattern = "^traitStats_", full.names = TRUE)
+  bad <- tf[!vapply(tf, run_finished, logical(1), APOT = APOT)]
+  ## demographicData files without a traitStats file
+  df <- list.files(out_folder, pattern = "^demographicData_", full.names = TRUE)
+  orphan <- df[!file.exists(sub("demographicData_", "traitStats_", df))]
+  file.remove(c(bad, sub("traitStats_", "demographicData_", bad[file.exists(sub("traitStats_", "demographicData_", bad))]), orphan))
+  if (length(bad) + length(orphan)) message("Removed ", length(bad) + length(orphan), " unfinished runs from ", out_folder)
+  invisible(length(bad))
+}
+
+## build SLiM command; seed is passed to SLiM with -s so every run can be repeated
+build_slim_cmd <- function(theta, sim_parameters, script,out_folder, seed) {
   
   keep <- names(theta)
   sim_parameters[, (keep) := as.list(theta[keep])]
@@ -81,7 +112,7 @@ build_slim_cmd <- function(theta, sim_parameters, script,out_folder) {
     as.character(sim_parameters)
   )
   
-  paste("slim ",
+  paste("slim -s", seed,
         paste0('-d folder=\\"', normalizePath(out_folder), '\\"'),
         paste0('-d inputDir=\\"', normalizePath(input_dir), '\\"'),
         paste(args, collapse = " "), script)
@@ -125,13 +156,13 @@ summarise_simulations <- function(files,
   obs_dens <- data.table(L = obs_dens$x, obs = obs_dens$y)
   
   rbindlist(
-    lapply(files, function(file) {
+    lapply(files, function(file) tryCatch({
       
       trait_file <- sub("demographicData_", "traitStats_", file)
       if (!file.exists(trait_file)) return(NULL)
       
       trait_data <- fread(trait_file)
-      if (max(trait_data$G) < APOT) return(NULL)
+      if (!nrow(trait_data) || !any(trait_data$G == APOT)) return(NULL)
       
       # ---- Parse parameters (robust) ----
       pars <- sapply(par_names,get_param,file)
@@ -179,7 +210,7 @@ summarise_simulations <- function(files,
         file = gsub("demographicData_","",basename(file))
       )
       
-    })
+    }, error = function(e) NULL))  # an unreadable or empty run is dropped (and replaced, see the ABC loop)
   )
 }
 
@@ -281,6 +312,18 @@ if(file.exists(file.path(base_folder, "REEIM_res.rds"))){
                     KDE = NULL)
 }
 
+## Run manifest: code commit and input-file checksums once, then one row per SLiM run
+## (generation, seed, full command) appended as runs are started
+seed_base <- as.integer(Sys.getenv("REEIM_SEED", "1"))
+dir.create(base_folder, showWarnings = FALSE, recursive = TRUE)
+manifest <- file.path(base_folder, "manifest.tsv")
+inputs <- c(slim_script, list.files(input_dir, full.names = TRUE), abc_settings$observed_data)
+writeLines(c(paste("# started", format(Sys.time()), "| commit",
+                   tryCatch(system("git rev-parse HEAD", intern = TRUE), error = function(e) "unknown", warning = function(w) "unknown"),
+                   "| REEIM_SEED", seed_base, "| n_particles", n_particles, "| alpha", alpha),
+             paste("# md5", tools::md5sum(inputs), inputs)),
+           file.path(base_folder, paste0("manifest_header_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".txt")))
+
 #GEN = 2
 no_gens_done <- length(REEIM_res$KDE)
 if(no_gens_done==Gens) stop("Final generation has already been done")
@@ -293,21 +336,31 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
   message("Output folder: ",normalizePath(out_folder))
   dir.create(out_folder, showWarnings = FALSE,recursive = TRUE)
   
-  ## Run SLiM simulations
-  while (length(list.files(out_folder, pattern = "trait")) < (n_particles)) { 
+  ## Run SLiM simulations until n_particles runs have finished and give valid summaries.
+  ## Unfinished runs (failed, killed, or cut off by a time limit before a restart) are
+  ## removed and replaced, so a generation never ends with fewer than n_particles.
+  remove_unfinished(out_folder, APOT)
+  n_replaced <- 0
+  repeat {
+  while (length(list.files(out_folder, pattern = "^traitStats_")) < n_particles) {
+
+    message(length(list.files(out_folder, pattern = "^traitStats_"))," out of ", n_particles, " particles are done")
     
-    message(length(list.files(out_folder, pattern = "trait"))," out of ", n_particles, " particles are done")
+    ## Seeds: reproducible from REEIM_SEED, the generation and the number of runs already done;
+    ## every run's seed and full command are appended to manifest.tsv
+    set.seed(seed_base + 1e5 * GEN + length(list.files(out_folder, pattern = "^traitStats_")))
+    seeds <- sample.int(.Machine$integer.max, n_batch)
     
     if(GEN==1){
-      cmds <- replicate(n_batch, {
+      cmds <- sapply(seeds, function(seed) {
         theta <- sapply(prior_lim, function(x) format(runif(1, x[1], x[2]),digits=3))
-        build_slim_cmd(theta, sim_parameters, slim_script,out_folder)
+        build_slim_cmd(theta, sim_parameters, slim_script,out_folder, seed)
       })
     } else {
       prev_centers <- as.matrix(REEIM_res$particles[[GEN-1]][keep == TRUE, ..par_names])
       prev_weights <- REEIM_res$particles[[GEN-1]][keep == TRUE, weights]
       prev_cov     <- REEIM_res$KDE[[GEN-1]]$H*c   # same kernel as the importance weights below
-      cmds <- replicate(n_batch, {
+      cmds <- sapply(seeds, function(seed) {
         theta_cand <- draw_proposal(prev_centers, prev_weights, prev_cov)
         
         ## redraw if out of bounds     
@@ -317,21 +370,25 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
         
         theta <- sapply(theta_cand, function(x) format(x,digits=3))
         names(theta) <- par_names
-        build_slim_cmd(theta, sim_parameters, slim_script,out_folder)
+        build_slim_cmd(theta, sim_parameters, slim_script,out_folder, seed)
       })
       
     }
     
     cmd_file <- file.path(out_folder, "cmds.txt")  # per run, so parallel ABCs don't overwrite each other's list
     writeLines(cmds, cmd_file)
-    system(paste("cat", shQuote(cmd_file), "| parallel -j", cores),ignore.stdout = TRUE,ignore.stderr = TRUE,intern = TRUE)
+    fwrite(data.table(generation = GEN, seed = seeds, command = cmds), manifest, sep = "\t", append = TRUE, quote = FALSE)
+    ## --joblog records each SLiM run's exit status and run time
+    system(paste("cat", shQuote(cmd_file), "| parallel --joblog", shQuote(paste0("+", file.path(out_folder, "joblog.txt"))), "-j", cores),
+           ignore.stdout = TRUE, ignore.stderr = TRUE, intern = TRUE)
+    remove_unfinished(out_folder, APOT)
     
   }
   
   
   message("Summerising generation ", GEN)
   ## Summarize
-  files <- list.files(out_folder, full.names = TRUE, pattern = "demographic")
+  files <- list.files(out_folder, full.names = TRUE, pattern = "^demographicData_")
   
   REEIM_res$particles[[GEN]] <- summarise_simulations(
     files,
@@ -344,6 +401,19 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
     size_structure_obs = size_structure_obs
   )
   
+  ## runs whose summaries are missing or not finite are deleted and replaced
+  ok <- REEIM_res$particles[[GEN]][, is.finite(SRMSE_dens) & is.finite(SRMSE_growth) & is.finite(LT) &
+                                      Reduce(`&`, lapply(.SD, is.finite)), .SDcols = par_names]
+  REEIM_res$particles[[GEN]] <- REEIM_res$particles[[GEN]][ok]
+  invalid <- files[!gsub("demographicData_", "", basename(files)) %in% REEIM_res$particles[[GEN]]$file]
+  if (REEIM_res$particles[[GEN]][, .N] >= n_particles || length(invalid) == 0) break
+  n_replaced <- n_replaced + length(invalid)
+  if (n_replaced > n_particles)
+    stop("More than ", n_particles, " runs in generation ", GEN, " gave no valid summaries; check summarise_simulations() on the files in ", out_folder)
+  message("Replacing ", length(invalid), " runs without valid summaries")
+  file.remove(invalid, sub("demographicData_", "traitStats_", invalid))
+  }
+
   ## keep 
   if(REEIM_res$particles[[GEN]][,.N]>n_particles) REEIM_res$particles[[GEN]] <- REEIM_res$particles[[GEN]][sample(1:.N,n_particles,replace = FALSE)] # keep only n_particles
   

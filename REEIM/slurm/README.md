@@ -67,6 +67,8 @@ sbatch -A <project> REEIM/slurm/abc.sbatch perch
 - The defaults are one whole `main` node (128 cores) for 24 hours. Override them on the command line if needed, e.g. `-p shared -c 32` for a small test.
 - To queue a continuation automatically, submit a second job that starts when the first ends: `sbatch -A <project> --dependency=afterany:<jobid> REEIM/slurm/abc.sbatch perch`.
 - The job writes `REEIM/out_perch/GEN_1 … GEN_5` and, after each generation, `REEIM/out_perch/REEIM_res.rds`.
+- Every SLiM run gets an explicit seed. `REEIM/out_perch/manifest.tsv` lists each run's generation, seed and full command, `manifest_header_*.txt` records the commit and input-file checksums, and `GEN_*/joblog.txt` has each run's exit status. Set `REEIM_SEED` (default 1) to change the seed stream.
+- Runs that fail or are cut off are deleted and replaced, so every generation ends with 2,500 finished runs.
 - **If the job hits its time limit, submit exactly the same command again.** It continues from the last finished generation. It first deletes the runs that were cut off, then fills up the generation in progress.
 - Do not copy an old `REEIM/out_REEIM/` folder in. The rerun must start from scratch in `out_perch`.
 
@@ -77,7 +79,7 @@ sbatch -A <project> REEIM/slurm/pps.sbatch
 ```
 
 This step reads `REEIM/out_perch/REEIM_res.rds` and writes `REEIM/scenarios_perch/`.
-If a PPS job is cut off, delete the newest scenario folder before you resubmit, because scenario folders that already exist are skipped.
+If a PPS job is cut off, submit the same command again: finished scenarios carry a `.done` marker and are skipped, and an unfinished one is rerun.
 
 ## 5. Follow progress
 

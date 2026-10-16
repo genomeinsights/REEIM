@@ -10,8 +10,8 @@
 # Posterior predictive simulations (perch), after the perch ABC has finished. From the repository root:
 #   sbatch -A <project> [-p <partition>] REEIM/slurm/pps.sbatch
 # Reads REEIM/out_perch/REEIM_res.rds and writes REEIM/scenarios_perch/.
-# Resubmitting skips scenarios whose folder exists, so if a job is cut off,
-# delete the last (incomplete) scenario folder before resubmitting.
+# Finished scenarios get a .done marker and are skipped when the job is resubmitted;
+# a scenario cut off by the time limit is simply run again.
 set -eo pipefail
 cd "${SLURM_SUBMIT_DIR:-.}"
 source REEIM/slurm/env.sh

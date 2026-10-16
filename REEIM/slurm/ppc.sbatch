@@ -3,7 +3,7 @@
 #SBATCH -N 1
 #SBATCH -n 1
 #SBATCH -p main
-#SBATCH -c 128
+#SBATCH -c 256
 #SBATCH -t 06:00:00
 #SBATCH -o slurm-%x-%j.out
 #

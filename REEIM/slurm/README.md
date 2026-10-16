@@ -19,7 +19,7 @@ Check with `test_one.sh` first.
 
 **Dardel specifics.** A thin node has 128 physical cores (256 logical CPUs) and 256 GB of memory.
 The `main` partition gives whole nodes, is charged for all 128 cores, and allows at most 24 hours per job.
-The job scripts start as many SLiM runs at once as `-c` (`SLURM_CPUS_PER_TASK`). On Dardel `-c` counts hardware threads, two per physical core, and a `main` job gets the whole node either way. Use `-c 256` on `main`: the job then runs 256 SLiM runs at once, which gives about 40% more runs per node-hour than the 128 started with `-c 128`.
+The job scripts start as many SLiM runs at once as `-c` (`SLURM_CPUS_PER_TASK`). On Dardel `-c` counts hardware threads, two per physical core, and a `main` job gets the whole node either way. The job scripts therefore default to `-p main -c 256 -t 24:00:00`: 256 SLiM runs at once, which gives about 40% more runs per node-hour than 128 at once (`-c 128`).
 With that, one ABC generation (2,500 runs) takes about 3.5–4 hours on one node (GEN_1 longer, because runs with invalid output are replaced), so the five generations need about 22 hours: submit the job together with a `--dependency=afterany` continuation (see below).
 For smaller jobs, `-p shared` charges per core and allows up to 7 days.
 Steps 1 and 3 (and the two plaice jobs) can run at the same time, because each system writes to its own folder.
@@ -65,7 +65,7 @@ Send Petri the time, because it sets the time limit to request.
 sbatch -A <project> REEIM/slurm/abc.sbatch perch
 ```
 
-- The defaults are one `main` node for 24 hours. On Dardel add `-c 256` so that 256 runs go at once (see Dardel specifics above), e.g. `sbatch -A <project> -c 256 REEIM/slurm/abc.sbatch perch`. Override the defaults on the command line if needed, e.g. `-p shared -c 32` for a small test.
+- The defaults are one whole `main` node running 256 SLiM runs at once, for 24 hours (see Dardel specifics above). Override the defaults on the command line if needed, e.g. `-p shared -c 32` for a small test.
 - To queue a continuation automatically, submit a second job that starts when the first ends: `sbatch -A <project> --dependency=afterany:<jobid> REEIM/slurm/abc.sbatch perch`.
 - The job writes `REEIM/out_perch/GEN_1 … GEN_5` and, after each generation, `REEIM/out_perch/REEIM_res.rds`.
 - Every SLiM run gets an explicit seed. `REEIM/out_perch/manifest.tsv` lists each run's generation, seed and full command, `manifest_header_*.txt` records the commit and input-file checksums, and `GEN_*/joblog.txt` has each run's exit status. Set `REEIM_SEED` (default 1) to change the seed stream. For a short test run, set `REEIM_N_PARTICLES` and `REEIM_GENS` (defaults 2500 and 5), e.g. `sbatch -A <project> -p shared -c 32 -t 4:00:00 --export=ALL,REEIM_N_PARTICLES=100,REEIM_GENS=2,REEIM_OUT=./REEIM/test_perch/ REEIM/slurm/abc.sbatch perch`. `REEIM_OUT` keeps the test out of `out_perch`; delete the test folder before the real run.

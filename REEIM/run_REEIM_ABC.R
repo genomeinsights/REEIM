@@ -262,9 +262,9 @@ draw_proposal <- function(centers, weights, cov_mat) {
 ## =======================
 
 slim_script  <- "./REEIM/REEIM.slim" ## the size selectivity and historical fishing intensity are read from input_dir (created by /R/SSF.R for perch)
-n_particles  <- 2500
+n_particles  <- as.integer(Sys.getenv("REEIM_N_PARTICLES", "2500"))  # override for short test runs
 n_batch      <- max(100, 2 * cores)  # simulations started per round; keeps all cores busy on large nodes
-Gens         <- 5
+Gens         <- as.integer(Sys.getenv("REEIM_GENS", "5"))
 
 ## System description (input_dir)
 model_parameters <- read_settings(file.path(input_dir, "parameters.csv"))   # constants read by REEIM.slim

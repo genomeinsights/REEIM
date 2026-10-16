@@ -16,7 +16,7 @@ SYSTEM=${1:-perch}
 cd "${SLURM_SUBMIT_DIR:-.}"
 source REEIM/slurm/env.sh
 INPUT=./REEIM/input/$SYSTEM
-OUT=./REEIM/out_$SYSTEM/
+OUT=${REEIM_OUT:-./REEIM/out_$SYSTEM/}   # REEIM_OUT: separate folder for test runs
 [ -d "$INPUT" ] || { echo "no input folder $INPUT"; exit 1; }
 mkdir -p "$OUT"
 # last cycle compared with the data = burn-in + fishing years - 1 (as in run_REEIM_ABC.R)

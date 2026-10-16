@@ -151,8 +151,18 @@ summarise_simulations <- function(files,
   
   ## Observed size density, normalised over the comparison window only, so that
   ## size classes the survey gear under-samples don't shift the curve (same for simulated sizes below)
-  obs_L <- size_structure_obs$L[size_structure_obs$L >= from & size_structure_obs$L <= to]
-  obs_dens <- density(obs_L, bw = BW, from = from, to = to)
+  in_win <- size_structure_obs$L >= from & size_structure_obs$L <= to
+  obs_L <- size_structure_obs$L[in_win]
+  ## With several sampled populations (Lake_ID, the NORS perch data), every lake counts
+  ## equally: each fish is weighted by 1/(fish from its lake in the window), so heavily
+  ## sampled lakes don't dominate the observed curve. Data without Lake_ID are pooled.
+  obs_w <- NULL
+  if ("Lake_ID" %in% names(size_structure_obs)) {
+    lake <- size_structure_obs$Lake_ID[in_win]
+    obs_w <- 1 / as.numeric(table(lake)[as.character(lake)])
+    obs_w <- obs_w / sum(obs_w)
+  }
+  obs_dens <- density(obs_L, bw = BW, from = from, to = to, weights = obs_w)
   obs_dens <- data.table(L = obs_dens$x, obs = obs_dens$y)
   
   rbindlist(

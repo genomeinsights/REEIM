@@ -126,9 +126,9 @@ gives the realised h² and Va in 1850 and 2020 (erosion of Va by fishing relativ
 window (genetic and survey PMRN), the fishing effect per 0.1 H, P(decline ≥ published), and the approximate ABC
 distance of each run, compared with the last ABC ε (does the population still look like plaice today?).
 
-Genetics are varied through the mutation rate u with Ve fixed: in REEIM, Va at mutation–selection balance scales
-with u and is nearly independent of the mutational SD (house-of-cards regime). At the pilot posterior medians,
-u = 0.5, 1, 2, 4, 8 × 10⁻⁶ gave Va ≈ 300, 550, 900, 1900, 3600 and h² ≈ 0.10, 0.2, 0.28, 0.44, 0.59, while sd from
-0.025 to 0.2 changed Va by no consistent amount. Selection on L_T (S_LT) also shifts Va by about 2–3× within a
-genetics level, so the realised h², not the input, is what is reported.
+The response to fishing is governed by the additive variance of L_T when fishing starts (1850), not by h² as such.
+Genetics are therefore varied through the mutation rate u with Ve fixed: at the pilot posterior medians,
+u = 0.5, 1, 2, 4, 8 × 10⁻⁶ gave Va in 1850 ≈ 300, 550, 900, 1900, 3600 (h² ≈ 0.10, 0.2, 0.28, 0.44, 0.59), whereas sd
+above 0.05 changed it little. Selection on L_T (S_LT) also shifts Va by about 2–3× within a genetics level, so the
+realised Va and h² at the start of fishing, not the inputs, are what is reported.
 

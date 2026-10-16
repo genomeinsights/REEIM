@@ -7,6 +7,7 @@
 ##       (uses their traitStats files; no new simulations). Also a naive evolutionary sensitivity, change / (10 H)
 ##       in % per 0.1 of H, which assumes no change without fishing (see the paired H = 0 controls below).
 ##   Rscript REEIM/plaice_validation/ppc_plaice.R prepare <abc_out> <ppc_out> <input_dir> [n=250] [seed=1]
+##       (seed sets the posterior draws and offsets the SLiM seeds; ppc.sbatch passes REEIM_SEED)
 ##       Draws n parameter sets from the weighted posterior and writes <ppc_out>/design.csv and cmds.txt for
 ##       REEIM_vesurvey.slim (REEIM.slim plus a random survey of 2000 females every year, 1900-2020). Run cmds.txt with
 ##       GNU parallel, e.g.  cat <ppc_out>/cmds.txt | parallel -j <cores>
@@ -69,7 +70,7 @@ if (mode == "genetic") {
 
 if (mode == "prepare") {
   abc_out <- args[2]; dir.create(args[3], showWarnings = FALSE, recursive = TRUE); out <- normalizePath(args[3]); input_dir <- normalizePath(args[4])
-  n <- if (length(args) >= 5) as.integer(args[5]) else 250; set.seed(if (length(args) >= 6) as.integer(args[6]) else 1)
+  n <- if (length(args) >= 5) as.integer(args[5]) else 250; sseed <- if (length(args) >= 6) as.integer(args[6]) else 1; set.seed(sseed)
   slim_script <- normalizePath("REEIM/plaice_validation/test_runs/REEIM_vesurvey.slim")
   r <- readRDS(file.path(abc_out, "REEIM_res.rds")); G <- length(r$particles); p <- r$particles[[G]][keep == TRUE]
   pars <- fread(file.path(input_dir, "priors.csv"))$parameter
@@ -79,7 +80,7 @@ if (mode == "prepare") {
   d <- rbind(d, d0)
   dir.create(file.path(out, "out"), showWarnings = FALSE, recursive = TRUE)
   fwrite(d, file.path(out, "design.csv"))
-  cmds <- sapply(seq_len(2 * n), function(i) paste0("slim -s ", 7000 + ((i - 1) %% n) + 1, " -d \"folder='", file.path(out, "out"), "'\" -d \"inputDir='", input_dir,
+  cmds <- sapply(seq_len(2 * n), function(i) paste0("slim -s ", 1e6 * (sseed - 1) + 7000 + ((i - 1) %% n) + 1, " -d \"folder='", file.path(out, "out"), "'\" -d \"inputDir='", input_dir,
     "'\" -d rep=", d$rep[i], " ", paste0("-d ", pars, "=", as.character(signif(unlist(d[i, ..pars]), 4)), collapse = " "), " ", slim_script, " > /dev/null 2>&1"))
   writeLines(cmds, file.path(out, "cmds.txt")); cat("Wrote", 2 * n, "commands (", n, "draws +", n, "H = 0 controls) to", file.path(out, "cmds.txt"), "\n")
 }
@@ -169,13 +170,13 @@ if (mode == "scenarios") {
   input_dir <- normalizePath(args[4]); gen <- fread(args[5])
   n <- if (length(args) >= 6) as.integer(args[6]) else 50
   Hs <- if (length(args) >= 7) as.numeric(strsplit(args[7], ",")[[1]]) else c(0, 0.04, 0.078, 0.12, 0.2)
-  set.seed(if (length(args) >= 8) as.integer(args[8]) else 1); sstep <- if (length(args) >= 9) as.integer(args[9]) else 5
+  sseed <- if (length(args) >= 8) as.integer(args[8]) else 1; set.seed(sseed); sstep <- if (length(args) >= 9) as.integer(args[9]) else 5
   slim_script <- normalizePath("REEIM/plaice_validation/test_runs/REEIM_vesurvey.slim")
   r <- readRDS(file.path(abc_out, "REEIM_res.rds")); G <- length(r$particles); p <- r$particles[[G]][keep == TRUE]
   pars <- setdiff(fread(file.path(input_dir, "priors.csv"))$parameter, "H")
   idx <- sample(nrow(p), n, replace = TRUE, prob = p$weights)
   d <- CJ(draw = seq_len(n), g = seq_len(nrow(gen)), H = Hs)
-  d <- cbind(d, gen[d$g], p[idx[d$draw], ..pars])[, `:=`(rep = .I, particle = idx[draw], seed = 9000 + draw)]
+  d <- cbind(d, gen[d$g], p[idx[d$draw], ..pars])[, `:=`(rep = .I, particle = idx[draw], seed = 1e6 * (sseed - 1) + 9000 + draw)]
   if (!"u" %in% names(d)) d[, u := NA_real_]
   dir.create(file.path(out, "out"), showWarnings = FALSE, recursive = TRUE)
   fwrite(d, file.path(out, "design.csv"))

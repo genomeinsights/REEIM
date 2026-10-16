@@ -11,8 +11,8 @@ Each job uses the cores of one node, and GNU parallel spreads the SLiM runs over
 | 1. Perch ABC-SMC | `abc.sbatch perch` | nothing | 5 generations × 2,500 SLiM runs (≈ 14,000 runs incl. replaced ones) ≈ 2,800 core-hours, about 22 node-hours: plan on two 24 h jobs |
 | 2. Perch posterior predictive simulations | `pps.sbatch` | step 1 finished | 24 scenarios × 240 runs ≈ 1,000 core-hours (if the runs are as long as the ABC runs) |
 | 3. Plaice ABC-SMC (two jobs) | `abc.sbatch plaice` (H prior 0.06–0.11, ICES catch/TSB) and `abc.sbatch plaice_Hfree` (H prior 0–0.2) | go-ahead from Petri (inputs still being tested) | about 2,800 core-hours each if the runs are as long as perch's |
-| 3b. Plaice posterior predictive check | `ppc.sbatch plaice` and `ppc.sbatch plaice_Hfree` | the matching step-3 job finished | 250 draws + 250 paired H = 0 controls each (~1 h on one node) |
-| 3c. Plaice evolutionary-change scenarios | `scenarios.sbatch plaice` | the matching step-3 job finished | 50 draws × 5 genetics × 5 H = 1,250 runs (~2–3 h on one node) |
+| 3b. Plaice posterior predictive check | `ppc.sbatch plaice` and `ppc.sbatch plaice_Hfree` | the matching step-3 job finished | 250 draws + 250 paired H = 0 controls = 500 runs each ≈ 90 core-hours, about 1 node-hour |
+| 3c. Plaice evolutionary-change scenarios | `scenarios.sbatch plaice` | the matching step-3 job finished | 50 draws × 5 genetics × 5 H = 1,250 runs ≈ 250 core-hours, about 2–3 node-hours (high-mutation runs are slower) |
 | 4. Recovery test | (added later) | step 1; the scripts are rebuilt after it | about 30,000 runs ≈ 5,000 core-hours |
 
 The sizes are measured on Dardel (October 2026, one `main` node, the `test_one.sh` parameter set): with 256 runs at once (two per physical core) a run takes about 17 min and a node finishes about 760 runs per hour, i.e. about 0.17 core-hours per run. With 128 runs at once (one per core) a run takes about 12 min but a node finishes only about 550 runs per hour. The estimates add about 15% for idle cores at the end of each round of runs. Run times vary with the parameter values, so treat them as ±30%.
@@ -83,6 +83,23 @@ sbatch -A <project> REEIM/slurm/pps.sbatch
 This step reads `REEIM/out_perch/REEIM_res.rds` and writes `REEIM/scenarios_perch/`.
 If a PPS job is cut off, submit the same command again: finished scenarios carry a `.done` marker and are skipped, and an unfinished one is rerun.
 
+Plaice runs the same way, with two ABCs that can run at the same time as each other and as perch:
+
+```
+sbatch -A <project> REEIM/slurm/abc.sbatch plaice
+sbatch -A <project> REEIM/slurm/abc.sbatch plaice_Hfree
+```
+
+When each has finished, run its posterior predictive check, and the scenarios for the main set:
+
+```
+sbatch -A <project> REEIM/slurm/ppc.sbatch plaice
+sbatch -A <project> REEIM/slurm/ppc.sbatch plaice_Hfree
+sbatch -A <project> REEIM/slurm/scenarios.sbatch plaice
+```
+
+They read `REEIM/out_<system>/` and write `REEIM/ppc_<system>/` and `REEIM/scen_<system>/`. As for the ABC, every run has an explicit seed (in `cmds.txt`), `manifest_header_*.txt` records the commit and input checksums, and `joblog.txt` each run's exit status; `REEIM_SEED` changes the seed stream, and `REEIM_ABC_OUT` / `REEIM_PPC_OUT` / `REEIM_SCEN_OUT` point a test run at other folders. If a job is cut off, submit the same command again: finished runs are skipped.
+
 ## 5. Follow progress
 
 ```
@@ -93,9 +110,10 @@ for g in REEIM/out_perch/GEN_*; do echo $g $(ls $g | grep -c ^traitStats_); done
 
 ## 6. Send back
 
-- `REEIM/out_perch/REEIM_res.rds` (and later `REEIM/out_plaice/REEIM_res.rds`).
+- `REEIM/out_perch/REEIM_res.rds`, `REEIM/out_plaice/REEIM_res.rds` and `REEIM/out_plaice_Hfree/REEIM_res.rds`.
 - The `slurm-*.out` logs.
 - For the PPS, the whole `REEIM/scenarios_perch/` folder as a tar file. Check its size first (`du -sh`).
+- For plaice, `REEIM/ppc_<system>/` and `REEIM/scen_<system>/` without their `out/` folders (the summaries, `fig/`, `design.csv`, `cmds.txt`, `joblog.txt` and `manifest_header_*.txt`); the `out/` folders hold about 4 MB per run of survey output.
 
 The `GEN_*` folders hold the raw SLiM output. Keep them on the cluster until Petri confirms the results, but they don't need to be sent.
 

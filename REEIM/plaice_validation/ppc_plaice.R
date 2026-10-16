@@ -44,7 +44,7 @@ if (mode == "genetic") {
 }
 
 if (mode == "prepare") {
-  abc_out <- args[2]; out <- normalizePath(args[3], mustWork = FALSE); input_dir <- normalizePath(args[4])
+  abc_out <- args[2]; dir.create(args[3], showWarnings = FALSE, recursive = TRUE); out <- normalizePath(args[3]); input_dir <- normalizePath(args[4])
   n <- if (length(args) >= 5) as.integer(args[5]) else 250; set.seed(if (length(args) >= 6) as.integer(args[6]) else 1)
   slim_script <- normalizePath("REEIM/plaice_validation/test_runs/REEIM_vesurvey.slim")
   r <- readRDS(file.path(abc_out, "REEIM_res.rds")); G <- length(r$particles); p <- r$particles[[G]][keep == TRUE]

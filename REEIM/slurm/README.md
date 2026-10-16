@@ -8,18 +8,19 @@ Each job uses the cores of one node, and GNU parallel spreads the SLiM runs over
 
 | Step | Job script | Needs | Approx. size |
 |---|---|---|---|
-| 1. Perch ABC-SMC | `abc.sbatch perch` | nothing | 5 generations × 2,500 SLiM runs ≈ 1,100–1,700 core-hours |
-| 2. Perch posterior predictive simulations | `pps.sbatch` | step 1 finished | 24 scenarios × 240 runs ≈ 500–800 core-hours |
-| 3. Plaice ABC-SMC (two jobs) | `abc.sbatch plaice` (H prior 0.06–0.11, ICES catch/TSB) and `abc.sbatch plaice_Hfree` (H prior 0–0.2) | go-ahead from Petri (inputs still being tested) | similar to step 1, each |
+| 1. Perch ABC-SMC | `abc.sbatch perch` | nothing | 5 generations × 2,500 SLiM runs (≈ 14,000 runs incl. replaced ones) ≈ 2,800 core-hours, about 22 node-hours: plan on two 24 h jobs |
+| 2. Perch posterior predictive simulations | `pps.sbatch` | step 1 finished | 24 scenarios × 240 runs ≈ 1,000 core-hours (if the runs are as long as the ABC runs) |
+| 3. Plaice ABC-SMC (two jobs) | `abc.sbatch plaice` (H prior 0.06–0.11, ICES catch/TSB) and `abc.sbatch plaice_Hfree` (H prior 0–0.2) | go-ahead from Petri (inputs still being tested) | about 2,800 core-hours each if the runs are as long as perch's |
 | 3b. Plaice posterior predictive check | `ppc.sbatch plaice` and `ppc.sbatch plaice_Hfree` | the matching step-3 job finished | 250 draws + 250 paired H = 0 controls each (~1 h on one node) |
-| 4. Recovery test | (added later) | step 1; the scripts are rebuilt after it | about 30,000 runs |
+| 4. Recovery test | (added later) | step 1; the scripts are rebuilt after it | about 30,000 runs ≈ 5,000 core-hours |
 
-The sizes assume about 5.5 min of core time per SLiM run, measured on a Mac mini running 13 at once, and up to 1.5× that on cluster cores.
+The sizes are measured on Dardel (October 2026, one `main` node, the `test_one.sh` parameter set): with 256 runs at once (two per physical core) a run takes about 17 min and a node finishes about 760 runs per hour, i.e. about 0.17 core-hours per run. With 128 runs at once (one per core) a run takes about 12 min but a node finishes only about 550 runs per hour. The estimates add about 15% for idle cores at the end of each round of runs. Run times vary with the parameter values, so treat them as ±30%.
 Check with `test_one.sh` first.
 
 **Dardel specifics.** A thin node has 128 physical cores (256 logical CPUs) and 256 GB of memory.
 The `main` partition gives whole nodes, is charged for all 128 cores, and allows at most 24 hours per job.
-The job scripts therefore default to `-p main -c 128 -t 24:00:00`, and one ABC generation (2,500 runs) takes about 2–3 hours on one node.
+The job scripts start as many SLiM runs at once as `-c` (`SLURM_CPUS_PER_TASK`). On Dardel `-c` counts hardware threads, two per physical core, and a `main` job gets the whole node either way. Use `-c 256` on `main`: the job then runs 256 SLiM runs at once, which gives about 40% more runs per node-hour than the 128 started with `-c 128`.
+With that, one ABC generation (2,500 runs) takes about 3.5–4 hours on one node (GEN_1 longer, because runs with invalid output are replaced), so the five generations need about 22 hours: submit the job together with a `--dependency=afterany` continuation (see below).
 For smaller jobs, `-p shared` charges per core and allows up to 7 days.
 Steps 1 and 3 (and the two plaice jobs) can run at the same time, because each system writes to its own folder.
 
@@ -54,7 +55,7 @@ The results are still written, but the log fills with errors.
 bash REEIM/slurm/test_one.sh        # on a compute node, e.g. inside an interactive job
 ```
 
-The run takes a few minutes. Expect the `real` time to be roughly 3–6 minutes.
+The run takes a few minutes. Expect the `real` time to be roughly 10–15 minutes on Dardel (3–6 minutes on a recent desktop).
 The last line printed should start with 10126, the final year.
 Send Petri the time, because it sets the time limit to request.
 
@@ -64,7 +65,7 @@ Send Petri the time, because it sets the time limit to request.
 sbatch -A <project> REEIM/slurm/abc.sbatch perch
 ```
 
-- The defaults are one whole `main` node (128 cores) for 24 hours. Override them on the command line if needed, e.g. `-p shared -c 32` for a small test.
+- The defaults are one `main` node for 24 hours. On Dardel add `-c 256` so that 256 runs go at once (see Dardel specifics above), e.g. `sbatch -A <project> -c 256 REEIM/slurm/abc.sbatch perch`. Override the defaults on the command line if needed, e.g. `-p shared -c 32` for a small test.
 - To queue a continuation automatically, submit a second job that starts when the first ends: `sbatch -A <project> --dependency=afterany:<jobid> REEIM/slurm/abc.sbatch perch`.
 - The job writes `REEIM/out_perch/GEN_1 … GEN_5` and, after each generation, `REEIM/out_perch/REEIM_res.rds`.
 - Every SLiM run gets an explicit seed. `REEIM/out_perch/manifest.tsv` lists each run's generation, seed and full command, `manifest_header_*.txt` records the commit and input-file checksums, and `GEN_*/joblog.txt` has each run's exit status. Set `REEIM_SEED` (default 1) to change the seed stream. For a short test run, set `REEIM_N_PARTICLES` and `REEIM_GENS` (defaults 2500 and 5), e.g. `sbatch -A <project> -p shared -c 32 -t 4:00:00 --export=ALL,REEIM_N_PARTICLES=100,REEIM_GENS=2,REEIM_OUT=./REEIM/test_perch/ REEIM/slurm/abc.sbatch perch`. `REEIM_OUT` keeps the test out of `out_perch`; delete the test folder before the real run.

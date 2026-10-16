@@ -34,6 +34,22 @@ summ <- function(d, w = rep(1, nrow(d)), lab) rbindlist(lapply(names(win), funct
 }))
 change <- function(tr, y) sapply(win, function(v) 100 * (tr[year == v[2], value][1] / tr[year == v[1], value][1] - 1))
 
+## Survey estimators (used by the survey and scenario modes)
+l50 <- function(x) { m <- glm(mature ~ length, binomial, x); b <- coef(m); -b[1] / b[2] }
+lp50 <- function(x, a = 4) { if (sum(x$first) < 10) return(NA_real_); b <- coef(glm(first ~ age + length, binomial, x)); -(b[1] + b[2] * a) / b[3] }
+## Barot et al. (2004) demographic method, as used for the published plaice PMRNs: from the maturity ogives at
+## ages a-1 and a and the mean growth increment ds between them (first-time maturing is not observed),
+## p(a, s) = [o(a, s) - o(a-1, s - ds)] / [1 - o(a-1, s - ds)]; Lp50 = length where p(a, s) = 0.5.
+## Ogives: one logistic over ages a-1 and a with an age effect and a common length slope (separate per-age
+## slopes often give p(a, s) curves that never reach 0.5).
+barot <- function(x, a = 4) {
+  x <- x[age %in% c(a - 1, a)]; if (nrow(x) < 40 || length(unique(x$mature)) < 2) return(NA_real_)
+  m <- suppressWarnings(glm(mature ~ factor(age) + length, binomial, x)); ds <- x[age == a, mean(length)] - x[age == a - 1, mean(length)]
+  p <- function(L) { o1 <- predict(m, data.frame(age = a - 1, length = L - ds), type = "response")
+    o2 <- predict(m, data.frame(age = a, length = L), type = "response"); (o2 - o1) / (1 - o1) }
+  r <- try(uniroot(function(L) p(L) - 0.5, c(50, 1000))$root, silent = TRUE); if (inherits(r, "try-error")) NA_real_ else r
+}
+
 if (mode == "genetic") {
   abc_out <- args[2]; out <- args[3]; dir.create(out, showWarnings = FALSE, recursive = TRUE)
   r <- readRDS(file.path(abc_out, "REEIM_res.rds")); G <- length(r$particles); p <- r$particles[[G]][keep == TRUE]
@@ -71,20 +87,6 @@ if (mode == "prepare") {
 if (mode == "survey") {
   out <- args[2]; dall <- fread(file.path(out, "design.csv")); dir.create(file.path(out, "fig"), showWarnings = FALSE)
   d <- if ("control_for" %in% names(dall)) dall[is.na(control_for)] else dall
-  l50 <- function(x) { m <- glm(mature ~ length, binomial, x); b <- coef(m); -b[1] / b[2] }
-  lp50 <- function(x, a = 4) { if (sum(x$first) < 10) return(NA_real_); b <- coef(glm(first ~ age + length, binomial, x)); -(b[1] + b[2] * a) / b[3] }
-  ## Barot et al. (2004) demographic method, as used for the published plaice PMRNs: from the maturity ogives at
-  ## ages a-1 and a and the mean growth increment ds between them (first-time maturing is not observed),
-  ## p(a, s) = [o(a, s) - o(a-1, s - ds)] / [1 - o(a-1, s - ds)]; Lp50 = length where p(a, s) = 0.5.
-  ## Ogives: one logistic over ages a-1 and a with an age effect and a common length slope (separate per-age
-  ## slopes often give p(a, s) curves that never reach 0.5).
-  barot <- function(x, a = 4) {
-    x <- x[age %in% c(a - 1, a)]; if (nrow(x) < 40 || length(unique(x$mature)) < 2) return(NA_real_)
-    m <- suppressWarnings(glm(mature ~ factor(age) + length, binomial, x)); ds <- x[age == a, mean(length)] - x[age == a - 1, mean(length)]
-    p <- function(L) { o1 <- predict(m, data.frame(age = a - 1, length = L - ds), type = "response")
-      o2 <- predict(m, data.frame(age = a, length = L), type = "response"); (o2 - o1) / (1 - o1) }
-    r <- try(uniroot(function(L) p(L) - 0.5, c(50, 1000))$root, silent = TRUE); if (inherits(r, "try-error")) NA_real_ else r
-  }
   res <- list(); traj <- list()
   for (i in seq_len(nrow(d))) {
     sf <- Sys.glob(sprintf("%s/out/survey_*_rep%d.txt", out, d$rep[i])); tf <- Sys.glob(sprintf("%s/out/traitStats_*_rep%d.txt", out, d$rep[i]))
@@ -147,4 +149,120 @@ if (mode == "survey") {
     cat("\nSpearman correlation of the 1900-2020 sensitivity with the parameters:\n")
     print(round(sapply(pars, function(v) cor(x[["1900-2020"]], x[[v]], method = "s", use = "complete")), 2))
   }
+}
+
+## ---------------------------------------------------------------------------------------------------------------
+## Scenarios: what evolutionary change to expect for a given H and additive genetic variance, in a population that
+## matches the present-day data (posterior draws). Genetics are set by Ve and sd (and optionally u) from a CSV with
+## columns label,Ve,sd[,u]; realised h2 of L_T is reported because selection on L_T also shapes Va.
+##   Rscript REEIM/plaice_validation/ppc_plaice.R scenarios <abc_out> <out> <input_dir> <genetics.csv> [n=50] [H=0,0.04,0.078,0.12,0.2] [seed=1] [surveyStep=5]
+##       writes <out>/design.csv and cmds.txt: n draws x genetics x H, all runs of one draw with the same seed
+##       (so within a genetics level, the H = 0 run is the paired no-fishing control).
+##   Rscript REEIM/plaice_validation/ppc_plaice.R scenario_summary <out>
+##       per scenario (genetics x H): realised h2 and Va at 1850 and 2020 (erosion vs H = 0), L_T change per window
+##       (genetic, survey PMRN with first-time maturing known, Barot), fishing effect and sensitivity per 0.1 H,
+##       P(decline >= published), and the approximate ABC distance of each run (fit to size distribution, size at
+##       age and L_T in 2020), compared with the last ABC epsilon.
+## ---------------------------------------------------------------------------------------------------------------
+if (mode == "scenarios") {
+  abc_out <- args[2]; dir.create(args[3], showWarnings = FALSE, recursive = TRUE); out <- normalizePath(args[3])
+  input_dir <- normalizePath(args[4]); gen <- fread(args[5])
+  n <- if (length(args) >= 6) as.integer(args[6]) else 50
+  Hs <- if (length(args) >= 7) as.numeric(strsplit(args[7], ",")[[1]]) else c(0, 0.04, 0.078, 0.12, 0.2)
+  set.seed(if (length(args) >= 8) as.integer(args[8]) else 1); sstep <- if (length(args) >= 9) as.integer(args[9]) else 5
+  slim_script <- normalizePath("REEIM/plaice_validation/test_runs/REEIM_vesurvey.slim")
+  r <- readRDS(file.path(abc_out, "REEIM_res.rds")); G <- length(r$particles); p <- r$particles[[G]][keep == TRUE]
+  pars <- setdiff(fread(file.path(input_dir, "priors.csv"))$parameter, "H")
+  idx <- sample(nrow(p), n, replace = TRUE, prob = p$weights)
+  d <- CJ(draw = seq_len(n), g = seq_len(nrow(gen)), H = Hs)
+  d <- cbind(d, gen[d$g], p[idx[d$draw], ..pars])[, `:=`(rep = .I, particle = idx[draw], seed = 9000 + draw)]
+  if (!"u" %in% names(d)) d[, u := NA_real_]
+  dir.create(file.path(out, "out"), showWarnings = FALSE, recursive = TRUE)
+  fwrite(d, file.path(out, "design.csv"))
+  writeLines(c(input_dir, abc_out, as.character(r$epsilons[G])), file.path(out, "settings.txt"))
+  cmds <- sapply(seq_len(nrow(d)), function(i) paste0("slim -s ", d$seed[i], " -d \"folder='", file.path(out, "out"), "'\" -d \"inputDir='", input_dir,
+    "'\" -d rep=", d$rep[i], " -d surveyStep=", sstep, " -d H=", d$H[i], " -d Ve=", d$Ve[i], " -d sd=", d$sd[i],
+    if (!is.na(d$u[i])) paste0(" -d u=", d$u[i]) else "", " ",
+    paste0("-d ", pars, "=", as.character(signif(unlist(d[i, ..pars]), 4)), collapse = " "), " ", slim_script, " > /dev/null 2>&1"))
+  writeLines(cmds, file.path(out, "cmds.txt"))
+  cat("Wrote", length(cmds), "commands (", n, "draws x", nrow(gen), "genetics x", length(Hs), "H ) to", file.path(out, "cmds.txt"), "\n")
+}
+
+if (mode == "scenario_summary") {
+  out <- args[2]; d <- fread(file.path(out, "design.csv")); st <- readLines(file.path(out, "settings.txt"))
+  input_dir <- st[1]; eps <- as.numeric(st[3]); dir.create(file.path(out, "fig"), showWarnings = FALSE)
+  ab <- grep("^#", readLines(file.path(input_dir, "abc_settings.csv")), value = TRUE, invert = TRUE)[-1]
+  gs <- function(k) { l <- ab[startsWith(ab, paste0(k, ","))]; strsplit(l, ",")[[1]][2] }
+  load(gs("observed_data")); LT_obs <- as.numeric(gs("LT_obs")); from <- as.numeric(gs("kde_from")); to <- as.numeric(gs("kde_to")); BW <- as.numeric(gs("kde_bw"))
+  o <- size_structure_obs$L; od <- density(o[o >= from & o <= to], bw = BW, from = from, to = to)$y
+  Gc <- Td + 170   # 2020
+  pch <- function(x) { v <- function(a, b) { y <- 100 * (x[year == b, value] / x[year == a, value] - 1); if (length(y)) y else NA_real_ }
+    c(`1905-85` = v(1905, 1985), `1960-90` = v(1965, 1995), `1985-2005` = v(1985, 2005), `1900-2020` = v(1905, 2015)) }
+  runs <- rbindlist(lapply(seq_len(nrow(d)), function(i) {
+    tf <- Sys.glob(sprintf("%s/out/traitStats_*_rep%d.txt", out, d$rep[i])); df <- Sys.glob(sprintf("%s/out/demographicData_*_rep%d.txt", out, d$rep[i]))
+    sf <- Sys.glob(sprintf("%s/out/survey_*_rep%d.txt", out, d$rep[i]))
+    if (!length(tf) || !length(df)) return(data.table(rep = d$rep[i], status = "aborted"))
+    t <- fread(tf); if (max(t$G) < Gc) return(data.table(rep = d$rep[i], status = "unfinished"))
+    tr <- t[, .(year = G - Td + start_year, value = LT)]
+    s <- fread(df, fill = Inf)
+    cs <- as.numeric(s[V1 == "countSize" & V2 == Gc, 3:ncol(s)]); cs[is.na(cs)] <- 0
+    z <- rep(seq_along(cs) - 1, cs); z <- z[z >= from & z <= to]
+    dens <- if (length(z) > 1) sqrt(mean((od - density(z, bw = BW, from = from, to = to)$y)^2)) / sd(od) else NA_real_
+    ms <- as.numeric(s[V1 == "meanSize" & V2 == Gc, 3:ncol(s)])
+    gg <- merge(age_structure_obs, data.table(age = seq_along(ms) - 1, pred = ms), by = "age")
+    grow <- gg[!is.na(pred), sqrt(mean((size - pred)^2)) / sd(size)]
+    sad <- abs(t[G == Gc, LT] - LT_obs) / LT_obs
+    res <- data.table(rep = d$rep[i], status = "ok", h2_1850 = t[G == Td, Va_LT / Vp_LT], h2_2020 = t[G == Gc, Va_LT / Vp_LT],
+                      Va_1850 = t[G == Td, Va_LT], Va_2020 = t[G == Gc, Va_LT], LT_2020 = t[G == Gc, LT],
+                      SRMSE_dens = dens, SRMSE_growth = grow, SAD_LT = sad, dist = dens + grow + sad)
+    ch <- rbind(data.table(measure = "genetic", as.data.table(as.list(change(tr)))), use.names = FALSE)
+    if (length(sf)) {
+      sv <- fread(sf); sv[, decade := 10 * (year %/% 10)]
+      pm <- sv[mature == 0 | first == 1, .(value = lp50(.SD)), by = decade][, .(year = decade + 5, value)]
+      pb <- sv[, .(value = barot(.SD)), by = decade][, .(year = decade + 5, value)]
+      ch <- rbind(ch, data.table(measure = "PMRN (first-time known)", as.data.table(as.list(pch(pm)))),
+                  data.table(measure = "PMRN (Barot)", as.data.table(as.list(pch(pb)))), use.names = FALSE)
+    }
+    setnames(ch, names(ch), sub("\\.", "-", names(ch)))
+    cbind(res[rep(1, nrow(ch))], ch)
+  }), fill = TRUE)
+  runs <- merge(d[, .(rep, draw, label, Ve, sd, H)], runs, by = "rep")
+  fwrite(runs, file.path(out, "scenario_runs.csv"))
+  cat("Run status:\n"); print(runs[measure == "genetic" | is.na(measure), .N, by = .(label, H, status)][order(label, H)])
+  ok <- runs[status == "ok"]
+  ## paired fishing effect and sensitivity (same draw and genetics, H = 0)
+  if (0 %in% ok$H) {
+    c0 <- ok[H == 0, c("draw", "label", "measure", names(win), "Va_2020"), with = FALSE]
+    setnames(c0, c(names(win), "Va_2020"), paste0(c(names(win), "Va_2020"), "_H0"))
+    ok <- merge(ok, c0, by = c("draw", "label", "measure"), all.x = TRUE)
+    for (k in names(win)) ok[, (paste0("sens_", k)) := ifelse(H > 0, (get(k) - get(paste0(k, "_H0"))) / (10 * H), NA_real_)]
+    ok[, Va_erosion_pct := ifelse(H > 0, 100 * (Va_2020 / Va_2020_H0 - 1), NA_real_)]
+  }
+  q <- function(x) sprintf("%.2g [%.2g, %.2g]", median(x, na.rm = TRUE), quantile(x, 0.05, na.rm = TRUE), quantile(x, 0.95, na.rm = TRUE))
+  S <- ok[measure == "genetic", .(n = .N, h2_2020 = q(h2_2020), Va_erosion_pct = if ("Va_erosion_pct" %in% names(.SD)) q(Va_erosion_pct) else NA,
+    dist = q(dist), share_fit = mean(dist <= eps), chg_1960_90 = q(`1960-90`), chg_1900_2020 = q(`1900-2020`),
+    sens_1960_90 = if ("sens_1960-90" %in% names(.SD)) q(`sens_1960-90`) else NA, sens_1900_2020 = if ("sens_1900-2020" %in% names(.SD)) q(`sens_1900-2020`) else NA,
+    P_Grift = mean(`1960-90` <= pub["1960-90"], na.rm = TRUE), P_vW = mean(`1905-85` <= pub["1905-85"], na.rm = TRUE)), by = .(label, H)][order(label, H)]
+  Sb <- ok[measure == "PMRN (Barot)", .(barot_1960_90 = q(`1960-90`), P_Grift_barot = mean(`1960-90` <= pub["1960-90"], na.rm = TRUE),
+    P_vW_barot = mean(`1905-85` <= pub["1905-85"], na.rm = TRUE)), by = .(label, H)]
+  if (nrow(Sb)) S <- merge(S, Sb, by = c("label", "H"), all.x = TRUE)
+  fwrite(S, file.path(out, "scenario_summary.csv")); cat("\nScenario summary (median [90%]); share_fit = share of runs with distance <= last ABC epsilon", eps, "\n"); print(S)
+  ## figure: genetic L_T change vs H by genetics (label with realised h2), and fit
+  lab <- ok[measure == "genetic", .(h2 = median(h2_2020, na.rm = TRUE)), by = label][, lab := sprintf("%s (h2 %.2f)", label, h2)]
+  F <- merge(ok[measure %in% c("genetic", "PMRN (Barot)")], lab[, .(label, lab)], by = "label")
+  F <- melt(F, id.vars = c("lab", "H", "measure"), measure.vars = c("1960-90", "1900-2020"), variable.name = "window")
+  Fb <- F[, .(med = median(value, na.rm = TRUE), lo = quantile(value, 0.05, na.rm = TRUE), hi = quantile(value, 0.95, na.rm = TRUE)), by = .(lab, H, measure, window)]
+  pl <- data.table(window = c("1960-90"), y = pub["1960-90"])
+  p1 <- ggplot(Fb, aes(H, med, colour = lab, fill = lab)) + geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.12, colour = NA) + geom_line() + geom_point(size = 1) +
+    geom_hline(data = pl, aes(yintercept = y), linetype = 2) + geom_vline(xintercept = 0.078, linetype = 3) + facet_grid(measure ~ window, scales = "free_y") +
+    theme_bw(base_size = 10) + theme(legend.position = "bottom") +
+    labs(x = "Terminal harvest rate H (dotted: assessed 0.078)", y = "Change (%)", colour = NULL, fill = NULL,
+         title = "Expected change in L_T by H and additive genetic variance (posterior draws; median, 90%)",
+         subtitle = "Dashed: Grift et al. 2003 (-12.5%, 1960-90). Bottom row: survey PMRN Lp50 (Barot method) from the simulated surveys")
+  ggsave(file.path(out, "fig/scenario_response.png"), p1, width = 10, height = 7, dpi = 150)
+  D2 <- merge(ok[measure == "genetic"], lab[, .(label, lab)], by = "label")
+  p2 <- ggplot(D2, aes(factor(H), dist, fill = lab)) + geom_boxplot(outlier.size = 0.5) + geom_hline(yintercept = eps, linetype = 2) +
+    theme_bw(base_size = 10) + theme(legend.position = "bottom") + labs(x = "H", y = "Approx. ABC distance (2020)", fill = NULL,
+    title = "Fit to the present-day data under each scenario (dashed: last ABC epsilon)")
+  ggsave(file.path(out, "fig/scenario_fit.png"), p2, width = 9, height = 4.5, dpi = 150)
 }

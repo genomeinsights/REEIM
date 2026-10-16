@@ -12,6 +12,7 @@ Each job uses the cores of one node, and GNU parallel spreads the SLiM runs over
 | 2. Perch posterior predictive simulations | `pps.sbatch` | step 1 finished | 24 scenarios × 240 runs ≈ 1,000 core-hours (if the runs are as long as the ABC runs) |
 | 3. Plaice ABC-SMC (two jobs) | `abc.sbatch plaice` (H prior 0.06–0.11, ICES catch/TSB) and `abc.sbatch plaice_Hfree` (H prior 0–0.2) | go-ahead from Petri (inputs still being tested) | about 2,800 core-hours each if the runs are as long as perch's |
 | 3b. Plaice posterior predictive check | `ppc.sbatch plaice` and `ppc.sbatch plaice_Hfree` | the matching step-3 job finished | 250 draws + 250 paired H = 0 controls each (~1 h on one node) |
+| 3c. Plaice evolutionary-change scenarios | `scenarios.sbatch plaice` | the matching step-3 job finished | 50 draws × 5 genetics × 5 H = 1,250 runs (~2–3 h on one node) |
 | 4. Recovery test | (added later) | step 1; the scripts are rebuilt after it | about 30,000 runs ≈ 5,000 core-hours |
 
 The sizes are measured on Dardel (October 2026, one `main` node, the `test_one.sh` parameter set): with 256 runs at once (two per physical core) a run takes about 17 min and a node finishes about 760 runs per hour, i.e. about 0.17 core-hours per run. With 128 runs at once (one per core) a run takes about 12 min but a node finishes only about 550 runs per hour. The estimates add about 15% for idle cores at the end of each round of runs. Run times vary with the parameter values, so treat them as ±30%.
@@ -106,6 +107,7 @@ The `GEN_*` folders hold the raw SLiM output. Keep them on the cluster until Pet
 | `env.sh` | activates it inside jobs; the only file you may need to edit |
 | `abc.sbatch` | ABC-SMC for one system (`perch`, `plaice`); resumes after a time limit |
 | `ppc.sbatch` | Posterior predictive check of L_T change for a plaice ABC (genetic L_T and survey-estimated PMRN/ogive); resumes |
+| `scenarios.sbatch` | Expected change in L_T for posterior draws × additive genetic variance × H, with fit to the present-day data; resumes |
 | `pps.sbatch` | perch posterior predictive simulations |
 | `clean_partial.sh` | removes runs cut off by a time limit (called by `abc.sbatch`) |
 | `test_one.sh` | single test run |

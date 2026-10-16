@@ -115,3 +115,20 @@ Supporting evidence from the test runs (`test_runs/abc_pilot/compat.R`): among 5
 16 cm window, the best fit reachable falls sharply with the size of the simulated 1960–90 decline
 (total distance 0.59 with no decline, 1.26 at ≥ 4%, 3.23 at ≥ 12.5%), and all three distance
 components get worse together.
+
+## Evolutionary-change scenarios
+
+`ppc_plaice.R scenarios` / `scenario_summary` (run by `../slurm/scenarios.sbatch`) ask what change in L_T to
+expect for a given harvest rate and additive genetic variance in a population that matches the present-day data:
+posterior draws × genetics (`scenario_genetics.csv`) × H (default 0, 0.04, 0.078, 0.12, 0.2). All runs of one draw
+share a seed, so within a genetics level the H = 0 run is the paired no-fishing control. Per scenario the summary
+gives the realised h² and Va in 1850 and 2020 (erosion of Va by fishing relative to H = 0), the L_T change per
+window (genetic and survey PMRN), the fishing effect per 0.1 H, P(decline ≥ published), and the approximate ABC
+distance of each run, compared with the last ABC ε (does the population still look like plaice today?).
+
+Genetics are varied through the mutation rate u with Ve fixed: in REEIM, Va at mutation–selection balance scales
+with u and is nearly independent of the mutational SD (house-of-cards regime). At the pilot posterior medians,
+u = 0.5, 1, 2, 4, 8 × 10⁻⁶ gave Va ≈ 300, 550, 900, 1900, 3600 and h² ≈ 0.10, 0.2, 0.28, 0.44, 0.59, while sd from
+0.025 to 0.2 changed Va by no consistent amount. Selection on L_T (S_LT) also shifts Va by about 2–3× within a
+genetics level, so the realised h², not the input, is what is reported.
+

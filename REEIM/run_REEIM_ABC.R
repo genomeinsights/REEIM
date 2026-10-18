@@ -263,7 +263,6 @@ draw_proposal <- function(centers, weights, cov_mat) {
 
 slim_script  <- "./REEIM/REEIM.slim" ## the size selectivity and historical fishing intensity are read from input_dir (created by /R/SSF.R for perch)
 n_particles  <- as.integer(Sys.getenv("REEIM_N_PARTICLES", "2500"))  # override for short test runs
-n_batch      <- max(100, 2 * cores)  # simulations started per round; keeps all cores busy on large nodes
 Gens         <- as.integer(Sys.getenv("REEIM_GENS", "5"))
 
 ## System description (input_dir)
@@ -347,20 +346,52 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
   dir.create(out_folder, showWarnings = FALSE,recursive = TRUE)
   
   ## Run SLiM simulations until n_particles runs have finished and give valid summaries.
-  ## Unfinished runs (failed, killed, or cut off by a time limit before a restart) are
-  ## removed and replaced, so a generation never ends with fewer than n_particles.
+  ## Runs are started in batches: each batch is one fixed list of commands (batch_<k>.txt) that
+  ## GNU parallel works through with all cores busy, so cores only wait for the slowest run at
+  ## the end of a batch, normally once per generation. The batch size is fixed before any of its
+  ## runs start (need / expected share of valid runs) and every run in it is used, so how long a
+  ## run takes cannot influence which parameter sets enter the generation. A batch cut off by a
+  ## time limit is finished on restart with the same commands (parallel --resume reruns the runs
+  ## that were not recorded as done), for the same reason. Runs without valid summaries are
+  ## removed and replaced by a further, smaller batch.
   remove_unfinished(out_folder, APOT)
   n_replaced <- 0
+  batch_files <- function() { b <- list.files(out_folder, pattern = "^batch_[0-9]+\\.txt$")
+    b[order(as.integer(gsub("\\D", "", b)))] }
+  run_batch <- function(b) {
+    jl <- file.path(out_folder, sub("^batch_", "joblog_", b))
+    ## --joblog records each SLiM run's exit status and run time; with --resume, runs already in it are skipped
+    system(paste("parallel --resume --joblog", shQuote(jl), "-j", cores, "<", shQuote(file.path(out_folder, b))),
+           ignore.stdout = TRUE, ignore.stderr = TRUE, intern = TRUE)
+    remove_unfinished(out_folder, APOT)
+  }
+  batch_done <- function(b) {
+    jl <- file.path(out_folder, sub("^batch_", "joblog_", b))
+    file.exists(jl) && length(readLines(jl)) - 1 >= length(readLines(file.path(out_folder, b)))
+  }
+  ## expected share of runs with valid summaries: 0.7 for prior draws (perch 0.86, plaice 0.79 in
+  ## the first runs), otherwise the share in the previous generation less a margin
+  p_valid <- if (GEN == 1) 0.7 else {
+    nb <- length(list.files(file.path(base_folder, paste0("GEN_", GEN - 1)), pattern = "^traitStats_"))
+    nr <- sum(sapply(list.files(file.path(base_folder, paste0("GEN_", GEN - 1)), pattern = "^joblog", full.names = TRUE),
+                     function(f) length(readLines(f)) - !grepl("^[0-9]", readLines(f, n = 1))))
+    if (nr > 0) max(0.5, min(0.98, nb / nr - 0.03)) else 0.9
+  }
   repeat {
-  while (length(list.files(out_folder, pattern = "^traitStats_")) < n_particles) {
+  repeat {
+    b <- tail(batch_files(), 1)
+    if (length(b) && !batch_done(b)) { message("Finishing ", b); run_batch(b); next }
+    n_done <- length(list.files(out_folder, pattern = "^traitStats_"))
+    message(n_done, " out of ", n_particles, " particles are done")
+    if (n_done >= n_particles) break
+    k <- length(batch_files()) + 1
+    n_new <- ceiling((n_particles - n_done) / p_valid)
 
-    message(length(list.files(out_folder, pattern = "^traitStats_"))," out of ", n_particles, " particles are done")
-    
-    ## Seeds: reproducible from REEIM_SEED, the generation and the number of runs already done;
+    ## Seeds: reproducible from REEIM_SEED, the generation and the batch number;
     ## every run's seed and full command are appended to manifest.tsv
-    set.seed(seed_base + 1e5 * GEN + length(list.files(out_folder, pattern = "^traitStats_")))
-    seeds <- sample.int(.Machine$integer.max, n_batch)
-    
+    set.seed(seed_base + 1e5 * GEN + 1e3 * k)
+    seeds <- sample.int(.Machine$integer.max, n_new)
+
     if(GEN==1){
       cmds <- sapply(seeds, function(seed) {
         theta <- sapply(prior_lim, function(x) format(runif(1, x[1], x[2]),digits=3))
@@ -385,14 +416,11 @@ for (GEN in (length(REEIM_res$KDE)+1):Gens) {
       
     }
     
-    cmd_file <- file.path(out_folder, "cmds.txt")  # per run, so parallel ABCs don't overwrite each other's list
-    writeLines(cmds, cmd_file)
+    b <- sprintf("batch_%d.txt", k)
+    writeLines(cmds, file.path(out_folder, b))
     fwrite(data.table(generation = GEN, seed = seeds, command = cmds), manifest, sep = "\t", append = TRUE, quote = FALSE)
-    ## --joblog records each SLiM run's exit status and run time
-    system(paste("cat", shQuote(cmd_file), "| parallel --joblog", shQuote(paste0("+", file.path(out_folder, "joblog.txt"))), "-j", cores),
-           ignore.stdout = TRUE, ignore.stderr = TRUE, intern = TRUE)
-    remove_unfinished(out_folder, APOT)
-    
+    message("Starting ", b, ": ", n_new, " runs (expected share valid ", round(p_valid, 2), ")")
+    run_batch(b)
   }
   
   

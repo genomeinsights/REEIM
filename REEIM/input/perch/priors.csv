@@ -1,5 +1,5 @@
 parameter,lower,upper,description
-w,0.1,0.6,cost for fecundity
+w,0.1,1.0,cost for fecundity (upper bound widened from 0.6 after the first Dardel run piled up near it)
 Shmax,60,120,upper limit for hmax
 SLT,100,250,lower limit for size at maturity
 f,0.1,1.5,scaling factor for fecundity that determines strength of density dependence

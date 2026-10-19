@@ -1,5 +1,5 @@
 parameter,lower,upper,description
-w,0.1,1.5,cost for fecundity (upper bound 1.5: reproduction-linked mortality at most all of adult natural mortality, M ~ 1.79 x GSI, Gunderson 1997)
+w,0.1,1.5,cost for fecundity (upper bound 1.5: reproduction-linked mortality at most all adult natural mortality from M ~ 1.79 x GSI in Gunderson 1997)
 Shmax,60,120,upper limit for hmax
 SLT,100,300,lower limit for size at maturity (upper bound widened from 250 after the posterior piled up near it)
 f,0.1,1.5,scaling factor for fecundity that determines strength of density dependence

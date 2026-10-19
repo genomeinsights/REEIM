@@ -1,6 +1,6 @@
 parameter,lower,upper,description
-w,0.1,0.6,cost for fecundity (as perch)
+w,0.1,1.5,cost for fecundity (as perch)
 Shmax,78,156,viability cost on hmax; perch range 60-120 scaled by hmaxPrior ratio 80.8/62
-SLT,129,324,viability cost on LT; perch range 100-250 scaled by LTPrior ratio 219/169.2
+SLT,129,388,viability cost on LT; perch range 100-300 scaled by LTPrior ratio 219/169.2
 f,0.005,0.3,fecundity scaling; test burn-ins (g = 0.25 set) give 99th age percentile 39 at f = 0.01; 30 at 0.03; 13 at 0.1; 4 (aborts) at 0.38. Survey q99 is about age 10
 H,0,0.2,terminal (2020) harvest rate; uninformative counterpart of input/plaice (H 0.06-0.11 from ICES catch/TSB). H > 0.216 exceeds 100% peak removal (I-09)

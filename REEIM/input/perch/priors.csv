@@ -1,6 +1,6 @@
 parameter,lower,upper,description
-w,0.1,1.0,cost for fecundity (upper bound widened from 0.6 after the first Dardel run piled up near it)
+w,0.1,1.5,cost for fecundity (upper bound 1.5: reproduction-linked mortality at most all of adult natural mortality, M ~ 1.79 x GSI, Gunderson 1997)
 Shmax,60,120,upper limit for hmax
-SLT,100,250,lower limit for size at maturity
+SLT,100,300,lower limit for size at maturity (upper bound widened from 250 after the posterior piled up near it)
 f,0.1,1.5,scaling factor for fecundity that determines strength of density dependence
 H,0,0.2,harvest rate

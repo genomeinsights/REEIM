@@ -15,11 +15,10 @@ params_with_priors <- c("w", "f", "Shmax", "SLT", "H")
 emergent_traits    <- c("g", "h", "LT")
 
 # ---- Prior definitions (only for inferred parameters) ------
-prior_lim <- list(w=c(0.1,0.6), ## cost for fecundity
-                  Shmax=c(60,120), ## upper limit for hmax
-                  SLT=c(100,250), ## lower limit for size at maturity
-                  f=c(0.1,1.5), ## scaling factor for fecundity that determines strength of density dependence
-                  H=c(0,0.3)) ## Harvest rate
+## read from the priors used by the ABC run, so the plotted priors match it
+priors_csv <- fread(file.path(Sys.getenv("REEIM_INPUT", "./REEIM/input/perch"), "priors.csv"))
+prior_lim <- setNames(lapply(seq_len(nrow(priors_csv)), function(i) c(priors_csv$lower[i], priors_csv$upper[i])),
+                      priors_csv$parameter)
 
 # ---- Expression labels -------------------------------------
 param_labels <- c(

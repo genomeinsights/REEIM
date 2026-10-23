@@ -54,19 +54,26 @@ keep <- base[keep == TRUE]
 # optional sanity: normalize weights
 keep[, weights := weights / sum(weights)]
 
-# H scenarios: posterior mode, weighted median and upper bound of the central 90% interval,
-# computed from the final generation (previously hard-coded; the old 0.127 was a KDE-grid midpoint)
+# H scenarios. REEIM_PPS_H (comma-separated, e.g. "0.02,0.10,0.16") sets them explicitly; otherwise the
+# weighted 10%, 50% and 90% quantiles of H in the final generation. (The posterior of H can be flat-topped,
+# so its mode is not a meaningful scenario.)
 weighted_quantile <- function(x, w, prob) {
   ord <- order(x); cw <- cumsum(w[ord]) / sum(w)
   approx(cw, x[ord], prob)$y
 }
-H_kde     <- ks::kde(x = keep$H, w = keep$weights * nrow(keep))
-H_targets <- signif(c(H_kde$eval.points[which.max(H_kde$estimate)],
-                      weighted_quantile(keep$H, keep$weights, c(0.5, 0.95))), 3)
+H_env <- Sys.getenv("REEIM_PPS_H", "")
+H_targets <- if (nzchar(H_env)) as.numeric(strsplit(H_env, ",")[[1]]) else
+  signif(weighted_quantile(keep$H, keep$weights, c(0.1, 0.5, 0.9)), 3)
+H_labels <- if (nzchar(H_env)) paste0("H", seq_along(H_targets)) else c("q10", "median", "q90")
 dir.create("./REEIM/scenarios/", recursive = TRUE, showWarnings = FALSE)
 out_root <- Sys.getenv("REEIM_PPS_OUT", "./REEIM/scenarios/")  # scenario output; existing scenario folders are skipped
 dir.create(out_root, recursive = TRUE, showWarnings = FALSE)
-fwrite(data.table(label = c("mode", "median", "q95"), H = H_targets), file.path(out_root, "H_targets.csv"))
+fwrite(data.table(label = H_labels, H = H_targets), file.path(out_root, "H_targets.csv"))
+## Minimum ESS when conditioning the posterior on a scenario H: at most 200, and at most half the ESS of the
+## final generation (otherwise the kernel widens until it no longer conditions on H)
+min_ESS_cond <- min(200, 0.5 * effective_sample_size(keep$weights))
+## Optional sharding over machines: REEIM_PPS_SHARD = "i/n" runs scenarios i, i+n, i+2n, ...
+shard <- as.integer(strsplit(Sys.getenv("REEIM_PPS_SHARD", "1/1"), "/")[[1]])
 
 # for no change in fishing intensity after APOT
 sim_parameters <- data.table(
@@ -212,14 +219,15 @@ scenario_done <- function(out_dir, n_runs) {
 }
 
 # si <- 10
-for(si in which(!file.exists(file.path(out_root, directories, ".done")))){
+for(si in which(!file.exists(file.path(out_root, directories, ".done")) & (seq_along(directories) - 1) %% shard[2] == shard[1] - 1)){
   sc <- scenario_grid[si,]
   cat(as.vector(unlist(sc)),"\n")
   
   
   # 1) Condition on H_target with a kernel; adapt bandwidth if ESS is small
-  cond <- kernel_condition_on_H(keep, HTarget = sc$HTarget, h = 0.02, min_ESS = 200)
+  cond <- kernel_condition_on_H(keep, HTarget = sc$HTarget, h = 0.02, min_ESS = min_ESS_cond)
   w_star <- cond$weights
+  cat(sprintf("conditioning on H = %g: bandwidth %.3f, ESS %.0f\n", sc$HTarget, cond$bandwidth, cond$ESS))
   ESS    <- cond$ESS
   h_used <- cond$bandwidth
   
@@ -265,6 +273,10 @@ for(si in which(!file.exists(file.path(out_root, directories, ".done")))){
     message("Scenario ", directories[si], " has unfinished runs; it will be rerun next time")
 }
 
+
+## The Hx = 0 (no fishing after APOT) scenarios are part of scenario_grid above; the older separate
+## section below is not used (it would also skip any scenario whose folder exists on another machine).
+quit(save = "no")
 
 #### === reduce fishing to 0 === ####
 
